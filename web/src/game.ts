@@ -5,24 +5,19 @@ type K = ReturnType<typeof kaplay>;
 const VW = 400;
 const VH = 680;
 
-// ── Skin colour ───────────────────────────────────────────────────────────────
-const SKIN_CLEAN: [number, number, number] = [255, 214, 186];
 const SKIN_FOUND: [number, number, number] = [228, 182, 148];
 
-// ── Steps (makeup only — no cleaning) ────────────────────────────────────────
 const STEPS = [
-  { id: "foundation", emoji: "🧴", label: "Dab foundation all over the face!" },
-  { id: "rub",        emoji: "🤲", label: "Rub the foundation in evenly!" },
-  { id: "eyeshadow",  emoji: "👁️",  label: "Sweep eye shadow on both eyelids!" },
-  { id: "eyeliner",   emoji: "🖊️",  label: "Draw eye liner on both eyes!" },
-  { id: "mascara",    emoji: "✨", label: "Brush mascara on the lashes!" },
-  { id: "blush",      emoji: "🌸", label: "Dab blush on both cheeks!" },
-  { id: "lipstick",   emoji: "💄", label: "Apply lipstick to the lips!" },
+  { id: "foundation", emoji: "🧴", label: "Dab foundation on the face!" },
+  { id: "eyeshadow",  emoji: "👁️",  label: "Sweep eye shadow on the eyelids!" },
+  { id: "eyeliner",   emoji: "🖊️",  label: "Draw eyeliner on the eyes!" },
+  { id: "mascara",    emoji: "✨",  label: "Brush mascara on the lashes!" },
+  { id: "blush",      emoji: "🌸",  label: "Dab blush on the cheeks!" },
+  { id: "lipstick",   emoji: "💄",  label: "Apply lipstick to the lips!" },
 ] as const;
 
 type StepId = typeof STEPS[number]["id"];
 
-// ── Face geometry ─────────────────────────────────────────────────────────────
 const FX = VW / 2;
 const FY = 310;
 const FRX = 88;
@@ -41,7 +36,6 @@ const MW = 36, MH = 13;
 
 const NX = FX, NY = FY + 8;
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function inEllipse(px: number, py: number, cx: number, cy: number, rx: number, ry: number, pad = 0): boolean {
   const dx = (px - cx) / (rx + pad);
   const dy = (py - cy) / (ry + pad);
@@ -54,28 +48,18 @@ function inCircle(px: number, py: number, cx: number, cy: number, r: number): bo
 }
 
 function inMouth(px: number, py: number): boolean {
-  return inEllipse(px, py, MX, MY, MW + 8, MH + 8);
-}
-
-function lerp3(a: [number, number, number], b: [number, number, number], t: number): [number, number, number] {
-  return [
-    Math.round(a[0] + (b[0] - a[0]) * t),
-    Math.round(a[1] + (b[1] - a[1]) * t),
-    Math.round(a[2] + (b[2] - a[2]) * t),
-  ];
+  return inEllipse(px, py, MX, MY, MW + 10, MH + 10);
 }
 
 function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
-// ── Particle types ────────────────────────────────────────────────────────────
 interface Confetti {
   x: number; y: number; vx: number; vy: number;
   color: [number, number, number]; angle: number; av: number; life: number;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => void): () => void {
   const k = kaplay({
     canvas,
@@ -87,33 +71,28 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
     pixelDensity: Math.min(window.devicePixelRatio || 1, 2),
   });
 
-  // ── Game state ──────────────────────────────────────────────────────────────
   let stepIdx = 0;
   let stepDone = false;
-  let isDown = false;
   let ptr = { x: VW / 2, y: VH / 2 };
 
-  // Per-step progress (0–1)
-  let foundCov = 0;
-  let rubCov = 0;
-  let shadowL = 0, shadowR = 0;
-  let linerL: { x: number; y: number }[] = [];
-  let linerR: { x: number; y: number }[] = [];
-  let linerPhase = 0;
-  let mascaraL = 0, mascaraR = 0;
-  let blushL = 0, blushR = 0;
-  let lipCov = 0;
+  // Each step is done the moment you touch/click the right area once
+  let foundDone = false;
+  let shadowLDone = false, shadowRDone = false;
+  let linerLDone = false, linerRDone = false;
+  let mascaraLDone = false, mascaraRDone = false;
+  let blushLDone = false, blushRDone = false;
+  let lipDone = false;
 
   let confetti: Confetti[] = [];
 
   function resetAll() {
-    stepIdx = 0; stepDone = false; isDown = false;
-    foundCov = 0; rubCov = 0;
-    shadowL = 0; shadowR = 0;
-    linerL = []; linerR = []; linerPhase = 0;
-    mascaraL = 0; mascaraR = 0;
-    blushL = 0; blushR = 0;
-    lipCov = 0;
+    stepIdx = 0; stepDone = false;
+    foundDone = false;
+    shadowLDone = false; shadowRDone = false;
+    linerLDone = false; linerRDone = false;
+    mascaraLDone = false; mascaraRDone = false;
+    blushLDone = false; blushRDone = false;
+    lipDone = false;
     confetti = [];
     onScore(0);
   }
@@ -124,17 +103,12 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
 
   function stepProgress(): number {
     const s = currentStep();
-    if (s === "foundation") return foundCov;
-    if (s === "rub")        return rubCov;
-    if (s === "eyeshadow")  return clamp01((shadowL + shadowR) / 2);
-    if (s === "eyeliner") {
-      const l = Math.min(linerL.length / 10, 1);
-      const r = Math.min(linerR.length / 10, 1);
-      return (l + r) / 2;
-    }
-    if (s === "mascara")  return clamp01((mascaraL + mascaraR) / 2);
-    if (s === "blush")    return clamp01((blushL + blushR) / 2);
-    if (s === "lipstick") return lipCov;
+    if (s === "foundation") return foundDone ? 1 : 0;
+    if (s === "eyeshadow")  return ((shadowLDone ? 1 : 0) + (shadowRDone ? 1 : 0)) / 2;
+    if (s === "eyeliner")   return ((linerLDone  ? 1 : 0) + (linerRDone  ? 1 : 0)) / 2;
+    if (s === "mascara")    return ((mascaraLDone ? 1 : 0) + (mascaraRDone ? 1 : 0)) / 2;
+    if (s === "blush")      return ((blushLDone  ? 1 : 0) + (blushRDone  ? 1 : 0)) / 2;
+    if (s === "lipstick")   return lipDone ? 1 : 0;
     return 0;
   }
 
@@ -158,40 +132,35 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
     }
   }
 
-  // ── Scene ───────────────────────────────────────────────────────────────────
   k.scene("main", () => {
     resetAll();
 
     k.add([k.rect(VW, VH), k.color(255, 238, 248), k.pos(0, 0), k.z(-10)]);
 
-    // Instruction bar
     const instrBg = k.add([k.rect(VW, 72), k.color(255, 182, 215), k.pos(0, 0), k.fixed(), k.z(10)]);
     instrBg;
-    const emojiLbl = k.add([k.text("", { size: 28 }), k.anchor("center"), k.pos(30, 36), k.fixed(), k.z(11)]);
-    const instrLbl = k.add([k.text("", { size: 14, width: VW - 72, align: "left" }), k.color(110, 20, 70), k.pos(60, 14), k.fixed(), k.z(11)]);
+    const emojiLbl  = k.add([k.text("", { size: 28 }), k.anchor("center"), k.pos(30, 36), k.fixed(), k.z(11)]);
+    const instrLbl  = k.add([k.text("", { size: 14, width: VW - 72, align: "left" }), k.color(110, 20, 70), k.pos(60, 14), k.fixed(), k.z(11)]);
 
-    // Progress bar
     k.add([k.rect(VW - 40, 9, { radius: 5 }), k.color(220, 175, 200), k.pos(20, VH - 18), k.fixed(), k.z(10)]);
-    const progBar = k.add([k.rect(2, 9, { radius: 5 }), k.color(220, 60, 130), k.pos(20, VH - 18), k.fixed(), k.z(11)]);
+    const progBar    = k.add([k.rect(2, 9, { radius: 5 }), k.color(220, 60, 130), k.pos(20, VH - 18), k.fixed(), k.z(11)]);
     const stepCounter = k.add([k.text("", { size: 13 }), k.color(160, 60, 110), k.anchor("right"), k.pos(VW - 22, VH - 38), k.fixed(), k.z(11)]);
 
-    // Next button
     const nextBtn = k.add([k.rect(160, 48, { radius: 24 }), k.color(220, 60, 130), k.anchor("center"), k.pos(VW / 2, VH - 58), k.fixed(), k.z(13), k.area(), k.opacity(0), "nextbtn"]);
     const nextTxt = k.add([k.text("Next Step ➜", { size: 16 }), k.color(255, 255, 255), k.anchor("center"), k.pos(VW / 2, VH - 58), k.fixed(), k.z(14), k.opacity(0)]);
 
-    // Restart button
     const restartBtn = k.add([k.rect(160, 48, { radius: 24 }), k.color(100, 60, 200), k.anchor("center"), k.pos(VW / 2, VH - 58), k.fixed(), k.z(13), k.area(), k.opacity(0), "restartbtn"]);
     const restartTxt = k.add([k.text("Play Again 🔄", { size: 16 }), k.color(255, 255, 255), k.anchor("center"), k.pos(VW / 2, VH - 58), k.fixed(), k.z(14), k.opacity(0)]);
 
-    function showNext(v: boolean) { nextBtn.opacity = v ? 1 : 0; nextTxt.opacity = v ? 1 : 0; }
+    function showNext(v: boolean)    { nextBtn.opacity    = v ? 1 : 0; nextTxt.opacity    = v ? 1 : 0; }
     function showRestart(v: boolean) { restartBtn.opacity = v ? 1 : 0; restartTxt.opacity = v ? 1 : 0; }
     showNext(false); showRestart(false);
 
     function updateUI() {
       const s = STEPS[stepIdx];
       if (!s) return;
-      emojiLbl.text = s.emoji;
-      instrLbl.text = s.label;
+      emojiLbl.text  = s.emoji;
+      instrLbl.text  = s.label;
       stepCounter.text = `${stepIdx + 1} / ${STEPS.length}`;
     }
     updateUI();
@@ -213,47 +182,42 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
 
     restartBtn.onClick(() => k.go("main"));
 
-    // ── Input ───────────────────────────────────────────────────────────────
-    function onMove(x: number, y: number) {
+    // ── Input: one touch/click on the right area = step done ──────────────
+    function handleTap(x: number, y: number) {
+      if (stepDone || stepIdx >= STEPS.length) return;
       ptr = { x, y };
-      if (!isDown || stepDone || stepIdx >= STEPS.length) return;
       const s = currentStep();
-      const inFace = inEllipse(x, y, FX, FY, FRX, FRY, 12);
 
-      if (s === "foundation" && inFace) foundCov = clamp01(foundCov + 0.014);
-      if (s === "rub" && inFace)        rubCov   = clamp01(rubCov   + 0.013);
-
+      if (s === "foundation" && inEllipse(x, y, FX, FY, FRX, FRY, 16)) {
+        foundDone = true;
+      }
       if (s === "eyeshadow") {
-        if (inEllipse(x, y, ELX, ELY, EW + 10, EH + 10)) shadowL = clamp01(shadowL + 0.045);
-        if (inEllipse(x, y, ERX, ERY, EW + 10, EH + 10)) shadowR = clamp01(shadowR + 0.045);
+        if (inEllipse(x, y, ELX, ELY, EW + 14, EH + 14)) shadowLDone = true;
+        if (inEllipse(x, y, ERX, ERY, EW + 14, EH + 14)) shadowRDone = true;
       }
       if (s === "eyeliner") {
-        if (linerPhase === 0 && inEllipse(x, y, ELX, ELY, EW + 14, EH + 14)) {
-          linerL.push({ x, y });
-          if (linerL.length >= 10) linerPhase = 1;
-        } else if (linerPhase === 1 && inEllipse(x, y, ERX, ERY, EW + 14, EH + 14)) {
-          linerR.push({ x, y });
-        }
+        if (inEllipse(x, y, ELX, ELY, EW + 14, EH + 14)) linerLDone = true;
+        if (inEllipse(x, y, ERX, ERY, EW + 14, EH + 14)) linerRDone = true;
       }
       if (s === "mascara") {
-        if (inEllipse(x, y, ELX, ELY, EW + 12, EH + 14)) mascaraL = clamp01(mascaraL + 0.05);
-        if (inEllipse(x, y, ERX, ERY, EW + 12, EH + 14)) mascaraR = clamp01(mascaraR + 0.05);
+        if (inEllipse(x, y, ELX, ELY, EW + 14, EH + 14)) mascaraLDone = true;
+        if (inEllipse(x, y, ERX, ERY, EW + 14, EH + 14)) mascaraRDone = true;
       }
       if (s === "blush") {
-        if (inCircle(x, y, CLX, CLY, CR + 16)) blushL = clamp01(blushL + 0.04);
-        if (inCircle(x, y, CRX, CRY, CR + 16)) blushR = clamp01(blushR + 0.04);
+        if (inCircle(x, y, CLX, CLY, CR + 20)) blushLDone = true;
+        if (inCircle(x, y, CRX, CRY, CR + 20)) blushRDone = true;
       }
-      if (s === "lipstick" && inMouth(x, y)) lipCov = clamp01(lipCov + 0.055);
+      if (s === "lipstick" && inMouth(x, y)) {
+        lipDone = true;
+      }
     }
 
-    k.onMousePress(() => { isDown = true; });
-    k.onMouseMove((p) => { ptr = { x: p.x, y: p.y }; onMove(p.x, p.y); });
-    k.onMouseRelease(() => { isDown = false; });
-    k.onTouchStart((t) => { isDown = true; ptr = { x: t.x, y: t.y }; });
-    k.onTouchMove((t) => { onMove(t.x, t.y); });
-    k.onTouchEnd(() => { isDown = false; });
+    k.onMousePress((_btn) => { const mp = k.mousePos(); handleTap(mp.x, mp.y); });
+    k.onMouseMove((p) => { ptr = { x: p.x, y: p.y }; });
+    k.onTouchStart((t) => { handleTap(t.x, t.y); });
+    k.onTouchMove((t) => { ptr = { x: t.x, y: t.y }; });
 
-    // ── Update ──────────────────────────────────────────────────────────────
+    // ── Update ─────────────────────────────────────────────────────────────
     k.onUpdate(() => {
       const dt = k.dt();
 
@@ -265,34 +229,31 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
 
       if (!stepDone && stepIdx < STEPS.length) {
         const prog = stepProgress();
-        progBar.width = Math.max(2, (VW - 40) * prog);
+        progBar.width = clamp01(prog) * (VW - 40);
         if (prog >= 1) { stepDone = true; showNext(true); }
       }
     });
 
-    // ── Draw ────────────────────────────────────────────────────────────────
+    // ── Draw ───────────────────────────────────────────────────────────────
     k.onDraw(() => {
       const isDone = stepIdx >= STEPS.length;
-      const s = isDone ? "lipstick" : currentStep();
-
-      // Skin colour
-      let skin: [number, number, number];
-      if (s === "foundation") {
-        skin = lerp3(SKIN_CLEAN, SKIN_FOUND, foundCov);
-      } else {
-        skin = [...SKIN_FOUND];
-      }
+      const s = isDone ? "done" : currentStep();
+      const skin: [number, number, number] = [...SKIN_FOUND];
 
       // Face shadow
       k.drawEllipse({ radiusX: FRX + 5, radiusY: FRY + 5, pos: k.vec2(FX + 5, FY + 7), color: k.rgb(170, 130, 110), opacity: 0.18 });
-
       // Face
       k.drawEllipse({ radiusX: FRX, radiusY: FRY, pos: k.vec2(FX, FY), color: k.rgb(...skin) });
 
+      // Foundation shimmer when applied
+      if (foundDone) {
+        k.drawEllipse({ radiusX: FRX - 4, radiusY: FRY - 4, pos: k.vec2(FX, FY), color: k.rgb(255, 230, 200), opacity: 0.22 });
+      }
+
       // Hair
-      k.drawEllipse({ radiusX: FRX + 10, radiusY: FRY * 0.6, pos: k.vec2(FX, FY - FRY * 0.5), color: k.rgb(55, 32, 16) });
-      k.drawEllipse({ radiusX: 30, radiusY: FRY * 0.75, pos: k.vec2(FX - FRX + 6, FY - 12), color: k.rgb(55, 32, 16) });
-      k.drawEllipse({ radiusX: 30, radiusY: FRY * 0.75, pos: k.vec2(FX + FRX - 6, FY - 12), color: k.rgb(55, 32, 16) });
+      k.drawEllipse({ radiusX: FRX + 10, radiusY: FRY * 0.6,  pos: k.vec2(FX, FY - FRY * 0.5),  color: k.rgb(55, 32, 16) });
+      k.drawEllipse({ radiusX: 30,        radiusY: FRY * 0.75, pos: k.vec2(FX - FRX + 6, FY - 12), color: k.rgb(55, 32, 16) });
+      k.drawEllipse({ radiusX: 30,        radiusY: FRY * 0.75, pos: k.vec2(FX + FRX - 6, FY - 12), color: k.rgb(55, 32, 16) });
 
       // Neck
       k.drawRect({ pos: k.vec2(FX - 24, FY + FRY - 12), width: 48, height: 55, color: k.rgb(...skin) });
@@ -302,8 +263,8 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
       k.drawRect({ pos: k.vec2(ERX - 20, ERY - 22), width: 40, height: 6, radius: 3, color: k.rgb(55, 32, 16) });
 
       // Eye shadow
-      if (shadowL > 0) k.drawEllipse({ radiusX: EW + 5, radiusY: EH + 7, pos: k.vec2(ELX, ELY - 2), color: k.rgb(155, 95, 210), opacity: shadowL * 0.72 });
-      if (shadowR > 0) k.drawEllipse({ radiusX: EW + 5, radiusY: EH + 7, pos: k.vec2(ERX, ERY - 2), color: k.rgb(155, 95, 210), opacity: shadowR * 0.72 });
+      if (shadowLDone) k.drawEllipse({ radiusX: EW + 5, radiusY: EH + 7, pos: k.vec2(ELX, ELY - 2), color: k.rgb(155, 95, 210), opacity: 0.72 });
+      if (shadowRDone) k.drawEllipse({ radiusX: EW + 5, radiusY: EH + 7, pos: k.vec2(ERX, ERY - 2), color: k.rgb(155, 95, 210), opacity: 0.72 });
 
       // Eye whites + iris + pupil + highlight
       k.drawEllipse({ radiusX: EW, radiusY: EH, pos: k.vec2(ELX, ELY), color: k.rgb(255, 255, 255) });
@@ -316,12 +277,12 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
       k.drawCircle({ pos: k.vec2(ERX + 3, ERY - 3), radius: 2.5, color: k.rgb(255, 255, 255) });
 
       // Eyeliner
-      drawPolyLine(k, linerL, 2.5, k.rgb(12, 8, 8));
-      drawPolyLine(k, linerR, 2.5, k.rgb(12, 8, 8));
+      if (linerLDone) drawEyeliner(k, ELX, ELY, EW, EH, false);
+      if (linerRDone) drawEyeliner(k, ERX, ERY, EW, EH, true);
 
       // Mascara lashes
-      drawLashes(k, ELX, ELY, EW, EH, mascaraL);
-      drawLashes(k, ERX, ERY, EW, EH, mascaraR);
+      if (mascaraLDone) drawLashes(k, ELX, ELY, EW, EH);
+      if (mascaraRDone) drawLashes(k, ERX, ERY, EW, EH);
 
       // Nose
       const noseC = k.rgb(Math.max(0, skin[0] - 32), Math.max(0, skin[1] - 32), Math.max(0, skin[2] - 32));
@@ -330,35 +291,25 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
       k.drawLine({ p1: k.vec2(NX - 12, NY + 16), p2: k.vec2(NX + 12, NY + 16), width: 2, color: noseC });
 
       // Blush
-      if (blushL > 0) k.drawCircle({ pos: k.vec2(CLX, CLY), radius: CR + 4, color: k.rgb(255, 140, 170), opacity: blushL * 0.52 });
-      if (blushR > 0) k.drawCircle({ pos: k.vec2(CRX, CRY), radius: CR + 4, color: k.rgb(255, 140, 170), opacity: blushR * 0.52 });
+      if (blushLDone) k.drawCircle({ pos: k.vec2(CLX, CLY), radius: CR + 4, color: k.rgb(255, 140, 170), opacity: 0.52 });
+      if (blushRDone) k.drawCircle({ pos: k.vec2(CRX, CRY), radius: CR + 4, color: k.rgb(255, 140, 170), opacity: 0.52 });
 
       // Mouth
-      const lipCol = lipCov > 0
-        ? k.rgb(
-            Math.round(210 * lipCov + (skin[0] - 20) * (1 - lipCov)),
-            Math.round(38  * lipCov + Math.max(0, skin[1] - 50) * (1 - lipCov)),
-            Math.round(85  * lipCov + Math.max(0, skin[2] - 40) * (1 - lipCov))
-          )
+      const lipCol = lipDone
+        ? k.rgb(210, 38, 85)
         : k.rgb(Math.max(0, skin[0] - 20), Math.max(0, skin[1] - 50), Math.max(0, skin[2] - 40));
       k.drawEllipse({ radiusX: MW,     radiusY: MH * 0.75, pos: k.vec2(MX, MY - 4), color: lipCol });
       k.drawEllipse({ radiusX: MW - 3, radiusY: MH,        pos: k.vec2(MX, MY + 6), color: lipCol });
       k.drawLine({ p1: k.vec2(MX - MW + 2, MY + 1), p2: k.vec2(MX + MW - 2, MY + 1), width: 1.5, color: k.rgb(Math.max(0, lipCol.r - 40), Math.max(0, lipCol.g - 20), Math.max(0, lipCol.b - 20)) });
 
-      // Foundation rub sheen
-      if (s === "rub" && rubCov > 0) {
-        k.drawEllipse({ radiusX: FRX - 4, radiusY: FRY - 4, pos: k.vec2(FX, FY), color: k.rgb(255, 230, 200), opacity: Math.sin(rubCov * Math.PI) * 0.28 });
-      }
-
-      // Brush cursor
-      if (isDown && !isDone) {
-        const bc = brushColor(s);
-        k.drawCircle({ pos: k.vec2(ptr.x, ptr.y), radius: 16, color: k.rgb(...bc), opacity: 0.32 });
-        k.drawCircle({ pos: k.vec2(ptr.x, ptr.y), radius: 16, color: k.rgb(...bc), opacity: 0.0, outline: { width: 2, color: k.rgb(...bc) } });
+      // Tap hints — highlight the target area for the current step
+      if (!isDone && !stepDone) {
+        const pulse = 0.45 + 0.45 * Math.sin(k.time() * 5);
+        drawHint(k, s, pulse);
       }
 
       // Progress bar
-      const prog = isDone ? 1 : stepProgress();
+      const prog = isDone ? 1 : clamp01(stepProgress());
       progBar.width = Math.max(2, (VW - 40) * prog);
 
       // Step-complete shimmer
@@ -380,8 +331,8 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
         }
         k.drawText({ text: "✨ GORGEOUS! ✨",      size: 30, pos: k.vec2(FX, FY + FRY + 28), anchor: "center", color: k.rgb(200, 40, 120) });
         k.drawText({ text: "You look amazing! 💖", size: 16, pos: k.vec2(FX, FY + FRY + 62), anchor: "center", color: k.rgb(160, 60, 120) });
-        emojiLbl.text = "🌟";
-        instrLbl.text = "All done! You're gorgeous!";
+        emojiLbl.text    = "🌟";
+        instrLbl.text    = "All done! You're gorgeous!";
         stepCounter.text = `${STEPS.length} / ${STEPS.length}`;
       }
     });
@@ -393,37 +344,70 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
   return () => k.quit();
 }
 
+// ── Hint overlays ─────────────────────────────────────────────────────────────
+function drawHint(k: K, s: string, pulse: number) {
+  const FX = VW / 2, FY = 310, FRX = 88, FRY = 108;
+  const ELX = FX - 33, ELY = FY - 22, ERX = FX + 33, ERY = FY - 22;
+  const EW = 26, EH = 12;
+  const CLX = FX - 62, CLY = FY + 14, CRX = FX + 62, CRY = FY + 14;
+  const CR = 20;
+  const MX = FX, MY = FY + 44, MW = 36, MH = 13;
+
+  if (s === "foundation") {
+    k.drawEllipse({ radiusX: FRX + 8, radiusY: FRY + 8, pos: k.vec2(FX, FY), color: k.rgb(228, 182, 148), opacity: pulse * 0.3 });
+    k.drawText({ text: "👆 TAP FACE", size: 18, pos: k.vec2(FX, FY + FRY + 22), anchor: "center", color: k.rgb(180, 120, 60) });
+  }
+  if (s === "eyeshadow") {
+    k.drawEllipse({ radiusX: EW + 12, radiusY: EH + 12, pos: k.vec2(ELX, ELY), color: k.rgb(155, 95, 210), opacity: pulse * 0.4 });
+    k.drawEllipse({ radiusX: EW + 12, radiusY: EH + 12, pos: k.vec2(ERX, ERY), color: k.rgb(155, 95, 210), opacity: pulse * 0.4 });
+    k.drawText({ text: "👆 TAP EACH EYE", size: 17, pos: k.vec2(FX, FY + FRY + 22), anchor: "center", color: k.rgb(130, 60, 200) });
+  }
+  if (s === "eyeliner") {
+    k.drawEllipse({ radiusX: EW + 12, radiusY: EH + 12, pos: k.vec2(ELX, ELY), color: k.rgb(30, 20, 20), opacity: pulse * 0.35 });
+    k.drawEllipse({ radiusX: EW + 12, radiusY: EH + 12, pos: k.vec2(ERX, ERY), color: k.rgb(30, 20, 20), opacity: pulse * 0.35 });
+    k.drawText({ text: "👆 TAP EACH EYE", size: 17, pos: k.vec2(FX, FY + FRY + 22), anchor: "center", color: k.rgb(40, 30, 30) });
+  }
+  if (s === "mascara") {
+    k.drawEllipse({ radiusX: EW + 12, radiusY: EH + 12, pos: k.vec2(ELX, ELY), color: k.rgb(20, 10, 10), opacity: pulse * 0.3 });
+    k.drawEllipse({ radiusX: EW + 12, radiusY: EH + 12, pos: k.vec2(ERX, ERY), color: k.rgb(20, 10, 10), opacity: pulse * 0.3 });
+    k.drawText({ text: "👆 TAP EACH EYE", size: 17, pos: k.vec2(FX, FY + FRY + 22), anchor: "center", color: k.rgb(40, 30, 30) });
+  }
+  if (s === "blush") {
+    k.drawCircle({ pos: k.vec2(CLX, CLY), radius: CR + 18, color: k.rgb(255, 140, 170), opacity: pulse * 0.4 });
+    k.drawCircle({ pos: k.vec2(CRX, CRY), radius: CR + 18, color: k.rgb(255, 140, 170), opacity: pulse * 0.4 });
+    k.drawText({ text: "👆 TAP EACH CHEEK", size: 16, pos: k.vec2(FX, FY + FRY + 22), anchor: "center", color: k.rgb(200, 80, 120) });
+  }
+  if (s === "lipstick") {
+    k.drawEllipse({ radiusX: MW + 10, radiusY: MH + 10, pos: k.vec2(MX, MY), color: k.rgb(210, 38, 85), opacity: pulse * 0.4 });
+    k.drawText({ text: "👆 TAP THE LIPS", size: 17, pos: k.vec2(FX, FY + FRY + 22), anchor: "center", color: k.rgb(180, 30, 70) });
+  }
+}
+
 // ── Lash drawing ──────────────────────────────────────────────────────────────
-function drawLashes(k: K, ex: number, ey: number, ew: number, eh: number, amount: number) {
-  if (amount <= 0) return;
+function drawLashes(k: K, ex: number, ey: number, ew: number, eh: number) {
   const count = 8;
   for (let i = 0; i < count; i++) {
     const t = i / (count - 1) - 0.5;
     const bx = ex + t * ew * 1.9;
     const by = ey - eh * 0.88;
     const ang = t * 0.55;
-    const len = (9 + Math.abs(t) * 5) * amount;
-    k.drawLine({ p1: k.vec2(bx, by), p2: k.vec2(bx + Math.sin(ang) * len * 0.4, by - Math.cos(ang) * len), width: 2.2, color: k.rgb(8, 8, 8), opacity: amount });
+    const len = 9 + Math.abs(t) * 5;
+    k.drawLine({
+      p1: k.vec2(bx, by),
+      p2: k.vec2(bx + Math.sin(ang) * len * 0.4, by - Math.cos(ang) * len),
+      width: 2.2,
+      color: k.rgb(8, 8, 8),
+    });
   }
 }
 
-function drawPolyLine(k: K, pts: { x: number; y: number }[], width: number, color: ReturnType<K["rgb"]>) {
-  for (let i = 1; i < pts.length; i++) {
-    const a = pts[i - 1]!;
-    const b = pts[i]!;
-    k.drawLine({ p1: k.vec2(a.x, a.y), p2: k.vec2(b.x, b.y), width, color });
-  }
+// ── Eyeliner drawing ──────────────────────────────────────────────────────────
+function drawEyeliner(k: K, ex: number, ey: number, ew: number, eh: number, _flip: boolean) {
+  k.drawLine({ p1: k.vec2(ex - ew, ey + eh * 0.3), p2: k.vec2(ex + ew, ey + eh * 0.3), width: 2.5, color: k.rgb(12, 8, 8) });
+  k.drawLine({ p1: k.vec2(ex - ew, ey - eh * 0.3), p2: k.vec2(ex + ew, ey - eh * 0.3), width: 2.5, color: k.rgb(12, 8, 8) });
 }
 
-function brushColor(step: string): [number, number, number] {
-  switch (step) {
-    case "foundation": return [228, 182, 148];
-    case "rub":        return [210, 162, 128];
-    case "eyeshadow":  return [155, 95, 210];
-    case "eyeliner":   return [20, 12, 12];
-    case "mascara":    return [20, 12, 12];
-    case "blush":      return [255, 140, 170];
-    case "lipstick":   return [210, 38, 85];
-    default:           return [200, 200, 200];
-  }
+function brushColor(_step: string): [number, number, number] {
+  return [200, 200, 200];
 }
+brushColor; // referenced to suppress unused warning
