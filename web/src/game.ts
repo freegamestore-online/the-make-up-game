@@ -11,9 +11,11 @@ const SKIN_CLEAN: [number, number, number] = [255, 214, 186];
 const SKIN_FOUND: [number, number, number] = [228, 182, 148];
 
 // ── Step definitions ──────────────────────────────────────────────────────────
+// Cleaning steps (water1, soap, water2) complete on a SINGLE TAP — no scrubbing.
+// Makeup steps still require dragging.
 const STEPS = [
   { id: "water1",     emoji: "💧", label: "Tap the face to splash water on it!" },
-  { id: "soap",       emoji: "🧼", label: "Rub soap all over the face!" },
+  { id: "soap",       emoji: "🧼", label: "Tap the face to lather up with soap!" },
   { id: "water2",     emoji: "💧", label: "Tap the face to rinse the bubbles off!" },
   { id: "foundation", emoji: "🧴", label: "Dab foundation all over the face!" },
   { id: "rub",        emoji: "🤲", label: "Rub the foundation in evenly!" },
@@ -25,6 +27,8 @@ const STEPS = [
 ] as const;
 
 type StepId = typeof STEPS[number]["id"];
+
+const CLEAN_STEPS: StepId[] = ["water1", "soap", "water2"];
 
 // ── Face geometry ─────────────────────────────────────────────────────────────
 const FX = VW / 2;
@@ -74,19 +78,18 @@ function clamp01(v: number): number {
 }
 
 // ── Particle types ────────────────────────────────────────────────────────────
-interface Drop {
+interface BurstDrop {
+  x: number; y: number; vx: number; vy: number; life: number; r: number;
+}
+interface RainDrop {
   x: number; y: number; vy: number; life: number; r: number;
 }
 interface Bubble {
   x: number; y: number; r: number; life: number; vx: number; vy: number;
 }
 interface Confetti {
-  x: number; y: number; vx: number; vy: number; color: [number, number, number]; angle: number; av: number; life: number;
-}
-
-// ── Splash animation state ────────────────────────────────────────────────────
-interface Splash {
-  x: number; y: number; drops: Drop[]; age: number;
+  x: number; y: number; vx: number; vy: number;
+  color: [number, number, number]; angle: number; av: number; life: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -107,10 +110,8 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
   let isDown = false;
   let ptr = { x: VW / 2, y: VH / 2 };
 
-  // Per-step progress (all 0–1)
-  let water1 = 0;      // instantly set to 1 on single tap
-  let soapCov = 0;
-  let water2 = 0;      // instantly set to 1 on single tap
+  // Per-step progress (0–1)
+  let cleanProgress = 0; // shared for water1 / soap / water2 (set to 1 on tap)
   let foundCov = 0;
   let rubCov = 0;
   let shadowL = 0, shadowR = 0;
@@ -122,20 +123,20 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
   let lipCov = 0;
 
   // Particles
-  let drops: Drop[] = [];
+  let burstDrops: BurstDrop[] = [];
+  let rainDrops: RainDrop[] = [];
   let bubbles: Bubble[] = [];
   let confetti: Confetti[] = [];
-  let splashes: Splash[] = [];   // big burst splashes for water steps
 
   function resetAll() {
     stepIdx = 0; stepDone = false; isDown = false;
-    water1 = 0; soapCov = 0; water2 = 0; foundCov = 0; rubCov = 0;
+    cleanProgress = 0; foundCov = 0; rubCov = 0;
     shadowL = 0; shadowR = 0;
     linerL = []; linerR = []; linerPhase = 0;
     mascaraL = 0; mascaraR = 0;
     blushL = 0; blushR = 0;
     lipCov = 0;
-    drops = []; bubbles = []; confetti = []; splashes = [];
+    burstDrops = []; rainDrops = []; bubbles = []; confetti = [];
     onScore(0);
   }
 
@@ -143,11 +144,13 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
     return STEPS[stepIdx]?.id ?? "lipstick";
   }
 
+  function isCleanStep(s: StepId): boolean {
+    return (CLEAN_STEPS as string[]).includes(s);
+  }
+
   function stepProgress(): number {
     const s = currentStep();
-    if (s === "water1")     return water1;
-    if (s === "soap")       return soapCov;
-    if (s === "water2")     return water2;
+    if (isCleanStep(s))     return cleanProgress;
     if (s === "foundation") return foundCov;
     if (s === "rub")        return rubCov;
     if (s === "eyeshadow")  return clamp01((shadowL + shadowR) / 2);
@@ -162,32 +165,12 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
     return 0;
   }
 
-  // ── Splash burst helper ───────────────────────────────────────────────────
-  function doWaterSplash(cx: number, cy: number) {
-    const burst: Drop[] = [];
-    for (let i = 0; i < 22; i++) {
-      const ang = (i / 22) * Math.PI * 2;
-      const spd = 60 + Math.random() * 120;
-      burst.push({
-        x: cx + Math.cos(ang) * 10,
-        y: cy + Math.sin(ang) * 10,
-        vy: spd,
-        life: 1,
-        r: 3 + Math.random() * 4,
-      });
-      // store vx in the drop by using a separate array below
-    }
-    splashes.push({ x: cx, y: cy, drops: burst, age: 0 });
-  }
-
-  // We need vx on drops for the splash burst — extend with a cast trick:
-  interface BurstDrop extends Drop { vx: number; }
-  function doWaterSplashFull(cx: number, cy: number) {
-    const burst: BurstDrop[] = [];
-    for (let i = 0; i < 28; i++) {
-      const ang = (i / 28) * Math.PI * 2 + Math.random() * 0.4;
-      const spd = 80 + Math.random() * 140;
-      burst.push({
+  // ── Burst splash on tap ───────────────────────────────────────────────────
+  function spawnBurst(cx: number, cy: number, count: number, color: [number, number, number]) {
+    for (let i = 0; i < count; i++) {
+      const ang = (i / count) * Math.PI * 2 + Math.random() * 0.4;
+      const spd = 80 + Math.random() * 150;
+      burstDrops.push({
         x: cx + Math.cos(ang) * 8,
         y: cy + Math.sin(ang) * 8,
         vx: Math.cos(ang) * spd,
@@ -196,98 +179,81 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
         r: 3 + Math.random() * 5,
       });
     }
-    // store as drops array
-    (splashes as Array<{ x: number; y: number; drops: BurstDrop[]; age: number }>).push({ x: cx, y: cy, drops: burst, age: 0 });
+    // Rain from top of face
+    for (let i = 0; i < 14; i++) {
+      rainDrops.push({
+        x: FX + (Math.random() - 0.5) * FRX * 2.2,
+        y: FY - FRY - 10,
+        vy: 120 + Math.random() * 100,
+        life: 1,
+        r: 3 + Math.random() * 4,
+      });
+    }
+    // Soap bubbles on soap step
+    if (currentStep() === "soap") {
+      for (let i = 0; i < 20; i++) {
+        bubbles.push({
+          x: FX + (Math.random() - 0.5) * FRX * 1.6,
+          y: FY + (Math.random() - 0.5) * FRY * 1.2,
+          r: 6 + Math.random() * 14,
+          life: 1,
+          vx: (Math.random() - 0.5) * 18,
+          vy: -20 - Math.random() * 30,
+        });
+      }
+    }
+    // Use color param to tint burst (water = blue, soap = white-ish)
+    const _ = color; // referenced to avoid unused-var warning
+  }
+
+  function spawnConfetti() {
+    confetti = [];
+    const cols: [number, number, number][] = [
+      [255, 80, 140], [255, 200, 50], [100, 200, 255],
+      [200, 100, 255], [80, 220, 120], [255, 140, 60],
+    ];
+    for (let i = 0; i < 60; i++) {
+      confetti.push({
+        x: Math.random() * VW,
+        y: -20 - Math.random() * 60,
+        vx: (Math.random() - 0.5) * 80,
+        vy: 80 + Math.random() * 120,
+        color: cols[i % cols.length]!,
+        angle: Math.random() * 360,
+        av: (Math.random() - 0.5) * 300,
+        life: 1,
+      });
+    }
   }
 
   // ── Scene ───────────────────────────────────────────────────────────────────
   k.scene("main", () => {
     resetAll();
 
-    // Background
     k.add([k.rect(VW, VH), k.color(255, 238, 248), k.pos(0, 0), k.z(-10)]);
 
-    // Top instruction bar
+    // Instruction bar
     const instrBg = k.add([k.rect(VW, 72), k.color(255, 182, 215), k.pos(0, 0), k.fixed(), k.z(10)]);
     instrBg;
+    const emojiLbl = k.add([k.text("", { size: 28 }), k.anchor("center"), k.pos(30, 36), k.fixed(), k.z(11)]);
+    const instrLbl = k.add([k.text("", { size: 14, width: VW - 72, align: "left" }), k.color(110, 20, 70), k.pos(60, 14), k.fixed(), k.z(11)]);
 
-    const emojiLbl = k.add([
-      k.text("", { size: 28 }),
-      k.anchor("center"),
-      k.pos(30, 36),
-      k.fixed(), k.z(11),
-    ]);
-
-    const instrLbl = k.add([
-      k.text("", { size: 14, width: VW - 72, align: "left" }),
-      k.color(110, 20, 70),
-      k.pos(60, 14),
-      k.fixed(), k.z(11),
-    ]);
-
-    // Progress bar bg
+    // Progress bar
     k.add([k.rect(VW - 40, 9, { radius: 5 }), k.color(220, 175, 200), k.pos(20, VH - 18), k.fixed(), k.z(10)]);
     const progBar = k.add([k.rect(2, 9, { radius: 5 }), k.color(220, 60, 130), k.pos(20, VH - 18), k.fixed(), k.z(11)]);
-
-    // Step counter
-    const stepCounter = k.add([
-      k.text("", { size: 13 }),
-      k.color(160, 60, 110),
-      k.anchor("right"),
-      k.pos(VW - 22, VH - 38),
-      k.fixed(), k.z(11),
-    ]);
+    const stepCounter = k.add([k.text("", { size: 13 }), k.color(160, 60, 110), k.anchor("right"), k.pos(VW - 22, VH - 38), k.fixed(), k.z(11)]);
 
     // Next button
-    const nextBtn = k.add([
-      k.rect(160, 48, { radius: 24 }),
-      k.color(220, 60, 130),
-      k.anchor("center"),
-      k.pos(VW / 2, VH - 58),
-      k.fixed(), k.z(13),
-      k.area(),
-      k.opacity(0),
-      "nextbtn",
-    ]);
-    const nextTxt = k.add([
-      k.text("Next Step ➜", { size: 16 }),
-      k.color(255, 255, 255),
-      k.anchor("center"),
-      k.pos(VW / 2, VH - 58),
-      k.fixed(), k.z(14),
-      k.opacity(0),
-    ]);
+    const nextBtn = k.add([k.rect(160, 48, { radius: 24 }), k.color(220, 60, 130), k.anchor("center"), k.pos(VW / 2, VH - 58), k.fixed(), k.z(13), k.area(), k.opacity(0), "nextbtn"]);
+    const nextTxt = k.add([k.text("Next Step ➜", { size: 16 }), k.color(255, 255, 255), k.anchor("center"), k.pos(VW / 2, VH - 58), k.fixed(), k.z(14), k.opacity(0)]);
 
-    // Restart button (shown on done screen)
-    const restartBtn = k.add([
-      k.rect(160, 48, { radius: 24 }),
-      k.color(100, 60, 200),
-      k.anchor("center"),
-      k.pos(VW / 2, VH - 58),
-      k.fixed(), k.z(13),
-      k.area(),
-      k.opacity(0),
-      "restartbtn",
-    ]);
-    const restartTxt = k.add([
-      k.text("Play Again 🔄", { size: 16 }),
-      k.color(255, 255, 255),
-      k.anchor("center"),
-      k.pos(VW / 2, VH - 58),
-      k.fixed(), k.z(14),
-      k.opacity(0),
-    ]);
+    // Restart button
+    const restartBtn = k.add([k.rect(160, 48, { radius: 24 }), k.color(100, 60, 200), k.anchor("center"), k.pos(VW / 2, VH - 58), k.fixed(), k.z(13), k.area(), k.opacity(0), "restartbtn"]);
+    const restartTxt = k.add([k.text("Play Again 🔄", { size: 16 }), k.color(255, 255, 255), k.anchor("center"), k.pos(VW / 2, VH - 58), k.fixed(), k.z(14), k.opacity(0)]);
 
-    function showNext(v: boolean) {
-      nextBtn.opacity = v ? 1 : 0;
-      nextTxt.opacity = v ? 1 : 0;
-    }
-    function showRestart(v: boolean) {
-      restartBtn.opacity = v ? 1 : 0;
-      restartTxt.opacity = v ? 1 : 0;
-    }
-    showNext(false);
-    showRestart(false);
+    function showNext(v: boolean) { nextBtn.opacity = v ? 1 : 0; nextTxt.opacity = v ? 1 : 0; }
+    function showRestart(v: boolean) { restartBtn.opacity = v ? 1 : 0; restartTxt.opacity = v ? 1 : 0; }
+    showNext(false); showRestart(false);
 
     function updateUI() {
       const s = STEPS[stepIdx];
@@ -302,7 +268,8 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
       if (!stepDone) return;
       stepIdx++;
       stepDone = false;
-      drops = []; bubbles = []; splashes = [];
+      cleanProgress = 0;
+      burstDrops = []; rainDrops = []; bubbles = [];
       showNext(false);
       if (stepIdx >= STEPS.length) {
         onScore(100);
@@ -314,91 +281,36 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
       }
     });
 
-    restartBtn.onClick(() => {
-      k.go("main");
-    });
+    restartBtn.onClick(() => k.go("main"));
 
-    // ── Particle helpers ───────────────────────────────────────────────────
-    function spawnBubble(x: number, y: number) {
-      bubbles.push({
-        x: x + (Math.random() - 0.5) * 24,
-        y: y + (Math.random() - 0.5) * 24,
-        r: 5 + Math.random() * 12,
-        life: 1,
-        vx: (Math.random() - 0.5) * 20,
-        vy: -15 - Math.random() * 25,
-      });
-    }
-
-    function spawnConfetti() {
-      confetti = [];
-      const cols: [number, number, number][] = [
-        [255, 80, 140], [255, 200, 50], [100, 200, 255],
-        [200, 100, 255], [80, 220, 120], [255, 140, 60],
-      ];
-      for (let i = 0; i < 60; i++) {
-        confetti.push({
-          x: Math.random() * VW,
-          y: -20 - Math.random() * 60,
-          vx: (Math.random() - 0.5) * 80,
-          vy: 80 + Math.random() * 120,
-          color: cols[i % cols.length]!,
-          angle: Math.random() * 360,
-          av: (Math.random() - 0.5) * 300,
-          life: 1,
-        });
-      }
-    }
-
-    // ── Single-tap water completion ────────────────────────────────────────
-    function handleWaterTap(x: number, y: number) {
-      const s = currentStep();
-      if (stepDone) return;
-      if ((s === "water1" || s === "water2") && inEllipse(x, y, FX, FY, FRX, FRY, 20)) {
-        // One tap = complete the step with a big splash!
-        if (s === "water1") water1 = 1;
-        if (s === "water2") water2 = 1;
-        doWaterSplashFull(x, y);
-        // Extra drops raining down from top
-        for (let i = 0; i < 12; i++) {
-          drops.push({
-            x: FX + (Math.random() - 0.5) * FRX * 2,
-            y: FY - FRY - 10,
-            vy: 120 + Math.random() * 100,
-            life: 1,
-            r: 3 + Math.random() * 4,
-          });
-        }
-      }
-    }
-
-    // ── Pointer handling ───────────────────────────────────────────────────
+    // ── Input ───────────────────────────────────────────────────────────────
     function onPress(x: number, y: number) {
       isDown = true;
       ptr = { x, y };
-      // Water steps complete on a SINGLE press
-      handleWaterTap(x, y);
+      if (stepDone || stepIdx >= STEPS.length) return;
+      const s = currentStep();
+
+      // Cleaning steps: ONE tap on the face = done!
+      if (isCleanStep(s) && inEllipse(x, y, FX, FY, FRX, FRY, 24)) {
+        cleanProgress = 1;
+        const burstColor: [number, number, number] = s === "soap" ? [210, 235, 255] : [100, 175, 255];
+        spawnBurst(x, y, 28, burstColor);
+      }
     }
 
     function onMove(x: number, y: number) {
       ptr = { x, y };
-      if (!isDown || stepIdx >= STEPS.length) return;
+      if (!isDown || stepDone || stepIdx >= STEPS.length) return;
       const s = currentStep();
-      // Water steps don't use drag — they're one-tap
-      if (s === "water1" || s === "water2") return;
+
+      // Cleaning steps don't use drag
+      if (isCleanStep(s)) return;
 
       const inFace = inEllipse(x, y, FX, FY, FRX, FRY, 12);
 
-      if (s === "soap" && inFace) {
-        soapCov = clamp01(soapCov + 0.011);
-        if (Math.random() < 0.4) spawnBubble(x, y);
-      }
-      if (s === "foundation" && inFace) {
-        foundCov = clamp01(foundCov + 0.014);
-      }
-      if (s === "rub" && inFace) {
-        rubCov = clamp01(rubCov + 0.013);
-      }
+      if (s === "foundation" && inFace) foundCov = clamp01(foundCov + 0.014);
+      if (s === "rub" && inFace)        rubCov  = clamp01(rubCov  + 0.013);
+
       if (s === "eyeshadow") {
         if (inEllipse(x, y, ELX, ELY, EW + 10, EH + 10)) shadowL = clamp01(shadowL + 0.045);
         if (inEllipse(x, y, ERX, ERY, EW + 10, EH + 10)) shadowR = clamp01(shadowR + 0.045);
@@ -419,47 +331,31 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
         if (inCircle(x, y, CLX, CLY, CR + 16)) blushL = clamp01(blushL + 0.04);
         if (inCircle(x, y, CRX, CRY, CR + 16)) blushR = clamp01(blushR + 0.04);
       }
-      if (s === "lipstick" && inMouth(x, y)) {
-        lipCov = clamp01(lipCov + 0.055);
-      }
+      if (s === "lipstick" && inMouth(x, y)) lipCov = clamp01(lipCov + 0.055);
     }
 
-    k.onMousePress((btn) => {
-      if (btn !== "left") return;
-      const mp = k.mousePos();
-      onPress(mp.x, mp.y);
-    });
+    k.onMousePress((btn) => { if (btn !== "left") return; const mp = k.mousePos(); onPress(mp.x, mp.y); });
     k.onMouseMove((p) => { ptr = { x: p.x, y: p.y }; onMove(p.x, p.y); });
     k.onMouseRelease(() => { isDown = false; });
     k.onTouchStart((t) => { onPress(t.x, t.y); });
     k.onTouchMove((t) => { onMove(t.x, t.y); });
     k.onTouchEnd(() => { isDown = false; });
 
-    // ── Update ─────────────────────────────────────────────────────────────
+    // ── Update ──────────────────────────────────────────────────────────────
     k.onUpdate(() => {
       const dt = k.dt();
 
-      // Splash burst drops (have vx stored in vy slot via cast)
-      type BurstDrop = Drop & { vx: number };
-      for (const sp of splashes) {
-        sp.age += dt;
-        for (const d of sp.drops as BurstDrop[]) {
-          d.x += d.vx * dt;
-          d.y += d.vy * dt;
-          d.vy += 200 * dt; // gravity
-          d.life -= dt * 1.5;
-        }
-        (sp.drops as BurstDrop[]) = (sp.drops as BurstDrop[]).filter(d => d.life > 0);
+      for (const d of burstDrops) {
+        d.x += d.vx * dt; d.y += d.vy * dt;
+        d.vy += 220 * dt; // gravity
+        d.life -= dt * 1.4;
       }
-      splashes = splashes.filter(sp => sp.age < 1.5);
+      burstDrops = burstDrops.filter(d => d.life > 0);
 
-      // Regular drops (rain from top)
-      for (const d of drops) { d.y += d.vy * dt; d.life -= dt * 1.8; }
-      drops = drops.filter(d => d.life > 0);
+      for (const d of rainDrops) { d.y += d.vy * dt; d.life -= dt * 1.8; }
+      rainDrops = rainDrops.filter(d => d.life > 0);
 
-      for (const b of bubbles) {
-        b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt * 0.5;
-      }
+      for (const b of bubbles) { b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt * 0.45; }
       bubbles = bubbles.filter(b => b.life > 0);
 
       for (const c of confetti) {
@@ -468,45 +364,42 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
       }
       confetti = confetti.filter(c => c.life > 0);
 
-      // Check step completion
       if (!stepDone && stepIdx < STEPS.length) {
         const prog = stepProgress();
         progBar.width = Math.max(2, (VW - 40) * prog);
-        if (prog >= 1) {
-          stepDone = true;
-          showNext(true);
-        }
+        if (prog >= 1) { stepDone = true; showNext(true); }
       }
     });
 
-    // ── Draw ───────────────────────────────────────────────────────────────
+    // ── Draw ────────────────────────────────────────────────────────────────
     k.onDraw(() => {
       const isDone = stepIdx >= STEPS.length;
       const s = isDone ? "done" : currentStep();
 
-      // ── Skin colour ──
+      // Skin colour
       let skin: [number, number, number];
       if (s === "water1") {
-        skin = lerp3(SKIN_DIRTY, SKIN_CLEAN, water1 * 0.4);
+        skin = lerp3(SKIN_DIRTY, SKIN_CLEAN, cleanProgress * 0.4);
       } else if (s === "soap") {
-        skin = lerp3(SKIN_DIRTY, SKIN_CLEAN, 0.4 + soapCov * 0.3);
+        skin = lerp3(SKIN_DIRTY, SKIN_CLEAN, 0.4 + cleanProgress * 0.3);
       } else if (s === "water2") {
-        skin = lerp3(lerp3(SKIN_DIRTY, SKIN_CLEAN, 0.7), SKIN_CLEAN, water2);
+        skin = lerp3(lerp3(SKIN_DIRTY, SKIN_CLEAN, 0.7), SKIN_CLEAN, cleanProgress);
       } else if (s === "foundation") {
         skin = lerp3(SKIN_CLEAN, SKIN_FOUND, foundCov);
       } else {
         skin = [...SKIN_FOUND];
       }
 
-      // ── Face shadow ──
+      // Face shadow
       k.drawEllipse({ radiusX: FRX + 5, radiusY: FRY + 5, pos: k.vec2(FX + 5, FY + 7), color: k.rgb(170, 130, 110), opacity: 0.18 });
 
-      // ── Face ──
+      // Face
       k.drawEllipse({ radiusX: FRX, radiusY: FRY, pos: k.vec2(FX, FY), color: k.rgb(...skin) });
 
-      // ── Dirt patches ──
+      // Dirt patches (water1 and soap steps only, fade out after tap)
       if (s === "water1" || s === "soap") {
-        const fade = s === "water1" ? Math.max(0, 1 - water1 * 1.2) : Math.max(0, 1 - soapCov * 1.5) * 0.6;
+        const base = s === "water1" ? 1 : 0.6;
+        const fade = Math.max(0, base - cleanProgress * 1.3);
         const spots = [
           { x: FX - 32, y: FY - 44, r: 16 }, { x: FX + 42, y: FY - 18, r: 12 },
           { x: FX - 12, y: FY + 32, r: 14 }, { x: FX + 22, y: FY + 52, r: 9 },
@@ -523,23 +416,23 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
         }
       }
 
-      // ── Hair ──
+      // Hair
       k.drawEllipse({ radiusX: FRX + 10, radiusY: FRY * 0.6, pos: k.vec2(FX, FY - FRY * 0.5), color: k.rgb(55, 32, 16) });
       k.drawEllipse({ radiusX: 30, radiusY: FRY * 0.75, pos: k.vec2(FX - FRX + 6, FY - 12), color: k.rgb(55, 32, 16) });
       k.drawEllipse({ radiusX: 30, radiusY: FRY * 0.75, pos: k.vec2(FX + FRX - 6, FY - 12), color: k.rgb(55, 32, 16) });
 
-      // ── Neck ──
+      // Neck
       k.drawRect({ pos: k.vec2(FX - 24, FY + FRY - 12), width: 48, height: 55, color: k.rgb(...skin) });
 
-      // ── Eyebrows ──
+      // Eyebrows
       k.drawRect({ pos: k.vec2(ELX - 20, ELY - 22), width: 40, height: 6, radius: 3, color: k.rgb(55, 32, 16) });
       k.drawRect({ pos: k.vec2(ERX - 20, ERY - 22), width: 40, height: 6, radius: 3, color: k.rgb(55, 32, 16) });
 
-      // ── Eye shadow ──
+      // Eye shadow
       if (shadowL > 0) k.drawEllipse({ radiusX: EW + 5, radiusY: EH + 7, pos: k.vec2(ELX, ELY - 2), color: k.rgb(155, 95, 210), opacity: shadowL * 0.72 });
       if (shadowR > 0) k.drawEllipse({ radiusX: EW + 5, radiusY: EH + 7, pos: k.vec2(ERX, ERY - 2), color: k.rgb(155, 95, 210), opacity: shadowR * 0.72 });
 
-      // ── Eye whites ──
+      // Eye whites + iris + pupil + highlight
       k.drawEllipse({ radiusX: EW, radiusY: EH, pos: k.vec2(ELX, ELY), color: k.rgb(255, 255, 255) });
       k.drawEllipse({ radiusX: EW, radiusY: EH, pos: k.vec2(ERX, ERY), color: k.rgb(255, 255, 255) });
       k.drawCircle({ pos: k.vec2(ELX, ELY), radius: 8, color: k.rgb(75, 48, 18) });
@@ -549,85 +442,84 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
       k.drawCircle({ pos: k.vec2(ELX + 3, ELY - 3), radius: 2.5, color: k.rgb(255, 255, 255) });
       k.drawCircle({ pos: k.vec2(ERX + 3, ERY - 3), radius: 2.5, color: k.rgb(255, 255, 255) });
 
-      // ── Eyeliner ──
+      // Eyeliner
       drawPolyLine(k, linerL, 2.5, k.rgb(12, 8, 8));
       drawPolyLine(k, linerR, 2.5, k.rgb(12, 8, 8));
 
-      // ── Mascara lashes ──
+      // Mascara lashes
       drawLashes(k, ELX, ELY, EW, EH, mascaraL);
       drawLashes(k, ERX, ERY, EW, EH, mascaraR);
 
-      // ── Nose ──
+      // Nose
       const noseC = k.rgb(Math.max(0, skin[0] - 32), Math.max(0, skin[1] - 32), Math.max(0, skin[2] - 32));
       k.drawLine({ p1: k.vec2(NX, NY - 10), p2: k.vec2(NX - 10, NY + 14), width: 2, color: noseC });
       k.drawLine({ p1: k.vec2(NX, NY - 10), p2: k.vec2(NX + 10, NY + 14), width: 2, color: noseC });
       k.drawLine({ p1: k.vec2(NX - 12, NY + 16), p2: k.vec2(NX + 12, NY + 16), width: 2, color: noseC });
 
-      // ── Blush ──
+      // Blush
       if (blushL > 0) k.drawCircle({ pos: k.vec2(CLX, CLY), radius: CR + 4, color: k.rgb(255, 140, 170), opacity: blushL * 0.52 });
       if (blushR > 0) k.drawCircle({ pos: k.vec2(CRX, CRY), radius: CR + 4, color: k.rgb(255, 140, 170), opacity: blushR * 0.52 });
 
-      // ── Mouth ──
+      // Mouth
       const lipCol = lipCov > 0
         ? k.rgb(
             Math.round(210 * lipCov + (skin[0] - 20) * (1 - lipCov)),
-            Math.round(38 * lipCov + Math.max(0, skin[1] - 50) * (1 - lipCov)),
-            Math.round(85 * lipCov + Math.max(0, skin[2] - 40) * (1 - lipCov))
+            Math.round(38  * lipCov + Math.max(0, skin[1] - 50) * (1 - lipCov)),
+            Math.round(85  * lipCov + Math.max(0, skin[2] - 40) * (1 - lipCov))
           )
         : k.rgb(Math.max(0, skin[0] - 20), Math.max(0, skin[1] - 50), Math.max(0, skin[2] - 40));
-      k.drawEllipse({ radiusX: MW, radiusY: MH * 0.75, pos: k.vec2(MX, MY - 4), color: lipCol });
-      k.drawEllipse({ radiusX: MW - 3, radiusY: MH, pos: k.vec2(MX, MY + 6), color: lipCol });
+      k.drawEllipse({ radiusX: MW,     radiusY: MH * 0.75, pos: k.vec2(MX, MY - 4), color: lipCol });
+      k.drawEllipse({ radiusX: MW - 3, radiusY: MH,        pos: k.vec2(MX, MY + 6), color: lipCol });
       k.drawLine({ p1: k.vec2(MX - MW + 2, MY + 1), p2: k.vec2(MX + MW - 2, MY + 1), width: 1.5, color: k.rgb(Math.max(0, lipCol.r - 40), Math.max(0, lipCol.g - 20), Math.max(0, lipCol.b - 20)) });
 
-      // ── Soap bubbles ──
+      // Soap bubbles (after tap on soap step)
       for (const b of bubbles) {
         k.drawCircle({ pos: k.vec2(b.x, b.y), radius: b.r, color: k.rgb(210, 235, 255), opacity: b.life * 0.45 });
         k.drawCircle({ pos: k.vec2(b.x - b.r * 0.35, b.y - b.r * 0.35), radius: b.r * 0.28, color: k.rgb(255, 255, 255), opacity: b.life * 0.75 });
       }
 
-      // ── Splash burst drops ──
-      type BurstDrop2 = Drop & { vx: number };
-      for (const sp of splashes) {
-        for (const d of sp.drops as BurstDrop2[]) {
-          k.drawEllipse({ radiusX: d.r * 0.65, radiusY: d.r, pos: k.vec2(d.x, d.y), color: k.rgb(100, 175, 255), opacity: d.life * 0.8 });
-        }
+      // Burst drops (all clean steps)
+      for (const d of burstDrops) {
+        const col = currentStep() === "soap" ? k.rgb(210, 235, 255) : k.rgb(100, 175, 255);
+        k.drawEllipse({ radiusX: d.r * 0.65, radiusY: d.r, pos: k.vec2(d.x, d.y), color: col, opacity: d.life * 0.8 });
       }
 
-      // ── Rain drops (water steps) ──
-      for (const d of drops) {
+      // Rain drops
+      for (const d of rainDrops) {
         k.drawEllipse({ radiusX: d.r * 0.7, radiusY: d.r, pos: k.vec2(d.x, d.y), color: k.rgb(100, 175, 255), opacity: d.life * 0.75 });
       }
 
-      // ── Foundation rub sheen ──
+      // Foundation rub sheen
       if (s === "rub" && rubCov > 0) {
         k.drawEllipse({ radiusX: FRX - 4, radiusY: FRY - 4, pos: k.vec2(FX, FY), color: k.rgb(255, 230, 200), opacity: Math.sin(rubCov * Math.PI) * 0.28 });
       }
 
-      // ── Cursor brush indicator (non-water steps only) ──
-      if (isDown && !isDone && s !== "water1" && s !== "water2") {
+      // Brush cursor (makeup steps only)
+      if (isDown && !isDone && !isCleanStep(s as StepId)) {
         const bc = brushColor(s);
         k.drawCircle({ pos: k.vec2(ptr.x, ptr.y), radius: 16, color: k.rgb(...bc), opacity: 0.32 });
         k.drawCircle({ pos: k.vec2(ptr.x, ptr.y), radius: 16, color: k.rgb(...bc), opacity: 0.0, outline: { width: 2, color: k.rgb(...bc) } });
       }
 
-      // ── Tap-to-splash hint (water steps, not yet done) ──
-      if ((s === "water1" || s === "water2") && !stepDone) {
+      // Pulsing tap hint for clean steps
+      if (isCleanStep(s as StepId) && !stepDone) {
         const pulse = 0.5 + 0.5 * Math.sin(k.time() * 4);
-        k.drawEllipse({ radiusX: FRX + 6, radiusY: FRY + 6, pos: k.vec2(FX, FY), color: k.rgb(100, 175, 255), opacity: pulse * 0.18 });
-        k.drawText({ text: "👆 TAP THE FACE!", size: 18, pos: k.vec2(FX, FY + FRY + 22), anchor: "center", color: k.rgb(80, 140, 220) });
+        k.drawEllipse({ radiusX: FRX + 6, radiusY: FRY + 6, pos: k.vec2(FX, FY), color: k.rgb(100, 175, 255), opacity: pulse * 0.2 });
+        const hint = s === "soap" ? "👆 TAP TO APPLY SOAP!" : "👆 TAP TO SPLASH WATER!";
+        k.drawText({ text: hint, size: 17, pos: k.vec2(FX, FY + FRY + 22), anchor: "center", color: k.rgb(80, 140, 220) });
       }
 
-      // ── Progress bar fill ──
+      // Progress bar
       const prog = isDone ? 1 : stepProgress();
       progBar.width = Math.max(2, (VW - 40) * prog);
 
-      // ── Step-complete shimmer ──
+      // Step-complete shimmer
       if (stepDone && !isDone) {
         const t = (k.time() * 4) % 1;
         k.drawRect({ pos: k.vec2(0, 72), width: VW, height: VH - 72, color: k.rgb(255, 210, 240), opacity: Math.sin(t * Math.PI) * 0.12 });
       }
 
-      // ── Done screen ──
+      // Done screen
       if (isDone) {
         for (const c of confetti) {
           k.drawRect({ pos: k.vec2(c.x - 5, c.y - 5), width: 10, height: 10, color: k.rgb(...c.color), opacity: c.life, angle: c.angle });
@@ -638,7 +530,7 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
           const rr = FRX + 20 + Math.sin(t2 * 3 + i) * 8;
           k.drawCircle({ pos: k.vec2(FX + Math.cos(ang) * rr, FY + Math.sin(ang) * rr * 0.6), radius: 4, color: k.rgb(255, 220, 60), opacity: 0.85 });
         }
-        k.drawText({ text: "✨ GORGEOUS! ✨", size: 30, pos: k.vec2(FX, FY + FRY + 28), anchor: "center", color: k.rgb(200, 40, 120) });
+        k.drawText({ text: "✨ GORGEOUS! ✨",      size: 30, pos: k.vec2(FX, FY + FRY + 28), anchor: "center", color: k.rgb(200, 40, 120) });
         k.drawText({ text: "You look amazing! 💖", size: 16, pos: k.vec2(FX, FY + FRY + 62), anchor: "center", color: k.rgb(160, 60, 120) });
         emojiLbl.text = "🌟";
         instrLbl.text = "All done! You're gorgeous!";
@@ -653,7 +545,7 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
   return () => k.quit();
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Lash drawing ──────────────────────────────────────────────────────────────
 function drawLashes(k: K, ex: number, ey: number, ew: number, eh: number, amount: number) {
   if (amount <= 0) return;
   const count = 8;
@@ -663,13 +555,7 @@ function drawLashes(k: K, ex: number, ey: number, ew: number, eh: number, amount
     const by = ey - eh * 0.88;
     const ang = t * 0.55;
     const len = (9 + Math.abs(t) * 5) * amount;
-    k.drawLine({
-      p1: k.vec2(bx, by),
-      p2: k.vec2(bx + Math.sin(ang) * len * 0.4, by - Math.cos(ang) * len),
-      width: 2.2,
-      color: k.rgb(8, 8, 8),
-      opacity: amount,
-    });
+    k.drawLine({ p1: k.vec2(bx, by), p2: k.vec2(bx + Math.sin(ang) * len * 0.4, by - Math.cos(ang) * len), width: 2.2, color: k.rgb(8, 8, 8), opacity: amount });
   }
 }
 
