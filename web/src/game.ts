@@ -8,12 +8,12 @@ const VH = 680;
 const SKIN_FOUND: [number, number, number] = [228, 182, 148];
 
 const STEPS = [
-  { id: "foundation", emoji: "🧴", label: "Dab foundation on the face!" },
-  { id: "eyeshadow",  emoji: "👁️",  label: "Sweep eye shadow on the eyelids!" },
-  { id: "eyeliner",   emoji: "🖊️",  label: "Draw eyeliner on the eyes!" },
-  { id: "mascara",    emoji: "✨",  label: "Brush mascara on the lashes!" },
-  { id: "blush",      emoji: "🌸",  label: "Dab blush on the cheeks!" },
-  { id: "lipstick",   emoji: "💄",  label: "Apply lipstick to the lips!" },
+  { id: "foundation", emoji: "🧴", label: "Tap the face to apply foundation!" },
+  { id: "eyeshadow",  emoji: "👁️",  label: "Tap the eyes to add eye shadow!" },
+  { id: "eyeliner",   emoji: "🖊️",  label: "Tap the eyes to draw eyeliner!" },
+  { id: "mascara",    emoji: "✨",  label: "Tap the eyes to brush mascara!" },
+  { id: "blush",      emoji: "🌸",  label: "Tap the cheeks to add blush!" },
+  { id: "lipstick",   emoji: "💄",  label: "Tap the lips to apply lipstick!" },
 ] as const;
 
 type StepId = typeof STEPS[number]["id"];
@@ -48,7 +48,7 @@ function inCircle(px: number, py: number, cx: number, cy: number, r: number): bo
 }
 
 function inMouth(px: number, py: number): boolean {
-  return inEllipse(px, py, MX, MY, MW + 10, MH + 10);
+  return inEllipse(px, py, MX, MY, MW + 14, MH + 14);
 }
 
 function clamp01(v: number): number {
@@ -75,12 +75,12 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
   let stepDone = false;
   let ptr = { x: VW / 2, y: VH / 2 };
 
-  // Each step is done the moment you touch/click the right area once
+  // Each step is done the moment you tap the right area ONCE
   let foundDone = false;
-  let shadowLDone = false, shadowRDone = false;
-  let linerLDone = false, linerRDone = false;
-  let mascaraLDone = false, mascaraRDone = false;
-  let blushLDone = false, blushRDone = false;
+  let shadowDone = false;
+  let linerDone = false;
+  let mascaraDone = false;
+  let blushDone = false;
   let lipDone = false;
 
   let confetti: Confetti[] = [];
@@ -88,10 +88,10 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
   function resetAll() {
     stepIdx = 0; stepDone = false;
     foundDone = false;
-    shadowLDone = false; shadowRDone = false;
-    linerLDone = false; linerRDone = false;
-    mascaraLDone = false; mascaraRDone = false;
-    blushLDone = false; blushRDone = false;
+    shadowDone = false;
+    linerDone = false;
+    mascaraDone = false;
+    blushDone = false;
     lipDone = false;
     confetti = [];
     onScore(0);
@@ -103,12 +103,12 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
 
   function stepProgress(): number {
     const s = currentStep();
-    if (s === "foundation") return foundDone ? 1 : 0;
-    if (s === "eyeshadow")  return ((shadowLDone ? 1 : 0) + (shadowRDone ? 1 : 0)) / 2;
-    if (s === "eyeliner")   return ((linerLDone  ? 1 : 0) + (linerRDone  ? 1 : 0)) / 2;
-    if (s === "mascara")    return ((mascaraLDone ? 1 : 0) + (mascaraRDone ? 1 : 0)) / 2;
-    if (s === "blush")      return ((blushLDone  ? 1 : 0) + (blushRDone  ? 1 : 0)) / 2;
-    if (s === "lipstick")   return lipDone ? 1 : 0;
+    if (s === "foundation") return foundDone   ? 1 : 0;
+    if (s === "eyeshadow")  return shadowDone  ? 1 : 0;
+    if (s === "eyeliner")   return linerDone   ? 1 : 0;
+    if (s === "mascara")    return mascaraDone  ? 1 : 0;
+    if (s === "blush")      return blushDone   ? 1 : 0;
+    if (s === "lipstick")   return lipDone     ? 1 : 0;
     return 0;
   }
 
@@ -139,11 +139,11 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
 
     const instrBg = k.add([k.rect(VW, 72), k.color(255, 182, 215), k.pos(0, 0), k.fixed(), k.z(10)]);
     instrBg;
-    const emojiLbl  = k.add([k.text("", { size: 28 }), k.anchor("center"), k.pos(30, 36), k.fixed(), k.z(11)]);
-    const instrLbl  = k.add([k.text("", { size: 14, width: VW - 72, align: "left" }), k.color(110, 20, 70), k.pos(60, 14), k.fixed(), k.z(11)]);
+    const emojiLbl   = k.add([k.text("", { size: 28 }), k.anchor("center"), k.pos(30, 36), k.fixed(), k.z(11)]);
+    const instrLbl   = k.add([k.text("", { size: 14, width: VW - 72, align: "left" }), k.color(110, 20, 70), k.pos(60, 14), k.fixed(), k.z(11)]);
 
     k.add([k.rect(VW - 40, 9, { radius: 5 }), k.color(220, 175, 200), k.pos(20, VH - 18), k.fixed(), k.z(10)]);
-    const progBar    = k.add([k.rect(2, 9, { radius: 5 }), k.color(220, 60, 130), k.pos(20, VH - 18), k.fixed(), k.z(11)]);
+    const progBar     = k.add([k.rect(2, 9, { radius: 5 }), k.color(220, 60, 130), k.pos(20, VH - 18), k.fixed(), k.z(11)]);
     const stepCounter = k.add([k.text("", { size: 13 }), k.color(160, 60, 110), k.anchor("right"), k.pos(VW - 22, VH - 38), k.fixed(), k.z(11)]);
 
     const nextBtn = k.add([k.rect(160, 48, { radius: 24 }), k.color(220, 60, 130), k.anchor("center"), k.pos(VW / 2, VH - 58), k.fixed(), k.z(13), k.area(), k.opacity(0), "nextbtn"]);
@@ -159,8 +159,8 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
     function updateUI() {
       const s = STEPS[stepIdx];
       if (!s) return;
-      emojiLbl.text  = s.emoji;
-      instrLbl.text  = s.label;
+      emojiLbl.text    = s.emoji;
+      instrLbl.text    = s.label;
       stepCounter.text = `${stepIdx + 1} / ${STEPS.length}`;
     }
     updateUI();
@@ -182,30 +182,28 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
 
     restartBtn.onClick(() => k.go("main"));
 
-    // ── Input: one touch/click on the right area = step done ──────────────
+    // ── ONE tap anywhere on the target area = step complete ────────────────
     function handleTap(x: number, y: number) {
       if (stepDone || stepIdx >= STEPS.length) return;
       ptr = { x, y };
       const s = currentStep();
 
-      if (s === "foundation" && inEllipse(x, y, FX, FY, FRX, FRY, 16)) {
+      if (s === "foundation" && inEllipse(x, y, FX, FY, FRX, FRY, 20)) {
         foundDone = true;
       }
-      if (s === "eyeshadow") {
-        if (inEllipse(x, y, ELX, ELY, EW + 14, EH + 14)) shadowLDone = true;
-        if (inEllipse(x, y, ERX, ERY, EW + 14, EH + 14)) shadowRDone = true;
+      // Eyes: tap anywhere near either eye
+      if (s === "eyeshadow" && (inEllipse(x, y, ELX, ELY, EW + 20, EH + 20) || inEllipse(x, y, ERX, ERY, EW + 20, EH + 20))) {
+        shadowDone = true;
       }
-      if (s === "eyeliner") {
-        if (inEllipse(x, y, ELX, ELY, EW + 14, EH + 14)) linerLDone = true;
-        if (inEllipse(x, y, ERX, ERY, EW + 14, EH + 14)) linerRDone = true;
+      if (s === "eyeliner" && (inEllipse(x, y, ELX, ELY, EW + 20, EH + 20) || inEllipse(x, y, ERX, ERY, EW + 20, EH + 20))) {
+        linerDone = true;
       }
-      if (s === "mascara") {
-        if (inEllipse(x, y, ELX, ELY, EW + 14, EH + 14)) mascaraLDone = true;
-        if (inEllipse(x, y, ERX, ERY, EW + 14, EH + 14)) mascaraRDone = true;
+      if (s === "mascara" && (inEllipse(x, y, ELX, ELY, EW + 20, EH + 20) || inEllipse(x, y, ERX, ERY, EW + 20, EH + 20))) {
+        mascaraDone = true;
       }
-      if (s === "blush") {
-        if (inCircle(x, y, CLX, CLY, CR + 20)) blushLDone = true;
-        if (inCircle(x, y, CRX, CRY, CR + 20)) blushRDone = true;
+      // Cheeks: tap anywhere near either cheek
+      if (s === "blush" && (inCircle(x, y, CLX, CLY, CR + 24) || inCircle(x, y, CRX, CRY, CR + 24))) {
+        blushDone = true;
       }
       if (s === "lipstick" && inMouth(x, y)) {
         lipDone = true;
@@ -245,13 +243,13 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
       // Face
       k.drawEllipse({ radiusX: FRX, radiusY: FRY, pos: k.vec2(FX, FY), color: k.rgb(...skin) });
 
-      // Foundation shimmer when applied
+      // Foundation sheen
       if (foundDone) {
         k.drawEllipse({ radiusX: FRX - 4, radiusY: FRY - 4, pos: k.vec2(FX, FY), color: k.rgb(255, 230, 200), opacity: 0.22 });
       }
 
       // Hair
-      k.drawEllipse({ radiusX: FRX + 10, radiusY: FRY * 0.6,  pos: k.vec2(FX, FY - FRY * 0.5),  color: k.rgb(55, 32, 16) });
+      k.drawEllipse({ radiusX: FRX + 10, radiusY: FRY * 0.6,  pos: k.vec2(FX, FY - FRY * 0.5),   color: k.rgb(55, 32, 16) });
       k.drawEllipse({ radiusX: 30,        radiusY: FRY * 0.75, pos: k.vec2(FX - FRX + 6, FY - 12), color: k.rgb(55, 32, 16) });
       k.drawEllipse({ radiusX: 30,        radiusY: FRY * 0.75, pos: k.vec2(FX + FRX - 6, FY - 12), color: k.rgb(55, 32, 16) });
 
@@ -262,9 +260,11 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
       k.drawRect({ pos: k.vec2(ELX - 20, ELY - 22), width: 40, height: 6, radius: 3, color: k.rgb(55, 32, 16) });
       k.drawRect({ pos: k.vec2(ERX - 20, ERY - 22), width: 40, height: 6, radius: 3, color: k.rgb(55, 32, 16) });
 
-      // Eye shadow
-      if (shadowLDone) k.drawEllipse({ radiusX: EW + 5, radiusY: EH + 7, pos: k.vec2(ELX, ELY - 2), color: k.rgb(155, 95, 210), opacity: 0.72 });
-      if (shadowRDone) k.drawEllipse({ radiusX: EW + 5, radiusY: EH + 7, pos: k.vec2(ERX, ERY - 2), color: k.rgb(155, 95, 210), opacity: 0.72 });
+      // Eye shadow (both eyes at once)
+      if (shadowDone) {
+        k.drawEllipse({ radiusX: EW + 5, radiusY: EH + 7, pos: k.vec2(ELX, ELY - 2), color: k.rgb(155, 95, 210), opacity: 0.72 });
+        k.drawEllipse({ radiusX: EW + 5, radiusY: EH + 7, pos: k.vec2(ERX, ERY - 2), color: k.rgb(155, 95, 210), opacity: 0.72 });
+      }
 
       // Eye whites + iris + pupil + highlight
       k.drawEllipse({ radiusX: EW, radiusY: EH, pos: k.vec2(ELX, ELY), color: k.rgb(255, 255, 255) });
@@ -276,13 +276,17 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
       k.drawCircle({ pos: k.vec2(ELX + 3, ELY - 3), radius: 2.5, color: k.rgb(255, 255, 255) });
       k.drawCircle({ pos: k.vec2(ERX + 3, ERY - 3), radius: 2.5, color: k.rgb(255, 255, 255) });
 
-      // Eyeliner
-      if (linerLDone) drawEyeliner(k, ELX, ELY, EW, EH, false);
-      if (linerRDone) drawEyeliner(k, ERX, ERY, EW, EH, true);
+      // Eyeliner (both eyes at once)
+      if (linerDone) {
+        drawEyeliner(k, ELX, ELY, EW, EH);
+        drawEyeliner(k, ERX, ERY, EW, EH);
+      }
 
-      // Mascara lashes
-      if (mascaraLDone) drawLashes(k, ELX, ELY, EW, EH);
-      if (mascaraRDone) drawLashes(k, ERX, ERY, EW, EH);
+      // Mascara lashes (both eyes at once)
+      if (mascaraDone) {
+        drawLashes(k, ELX, ELY, EW, EH);
+        drawLashes(k, ERX, ERY, EW, EH);
+      }
 
       // Nose
       const noseC = k.rgb(Math.max(0, skin[0] - 32), Math.max(0, skin[1] - 32), Math.max(0, skin[2] - 32));
@@ -290,9 +294,11 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
       k.drawLine({ p1: k.vec2(NX, NY - 10), p2: k.vec2(NX + 10, NY + 14), width: 2, color: noseC });
       k.drawLine({ p1: k.vec2(NX - 12, NY + 16), p2: k.vec2(NX + 12, NY + 16), width: 2, color: noseC });
 
-      // Blush
-      if (blushLDone) k.drawCircle({ pos: k.vec2(CLX, CLY), radius: CR + 4, color: k.rgb(255, 140, 170), opacity: 0.52 });
-      if (blushRDone) k.drawCircle({ pos: k.vec2(CRX, CRY), radius: CR + 4, color: k.rgb(255, 140, 170), opacity: 0.52 });
+      // Blush (both cheeks at once)
+      if (blushDone) {
+        k.drawCircle({ pos: k.vec2(CLX, CLY), radius: CR + 4, color: k.rgb(255, 140, 170), opacity: 0.52 });
+        k.drawCircle({ pos: k.vec2(CRX, CRY), radius: CR + 4, color: k.rgb(255, 140, 170), opacity: 0.52 });
+      }
 
       // Mouth
       const lipCol = lipDone
@@ -300,9 +306,10 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
         : k.rgb(Math.max(0, skin[0] - 20), Math.max(0, skin[1] - 50), Math.max(0, skin[2] - 40));
       k.drawEllipse({ radiusX: MW,     radiusY: MH * 0.75, pos: k.vec2(MX, MY - 4), color: lipCol });
       k.drawEllipse({ radiusX: MW - 3, radiusY: MH,        pos: k.vec2(MX, MY + 6), color: lipCol });
-      k.drawLine({ p1: k.vec2(MX - MW + 2, MY + 1), p2: k.vec2(MX + MW - 2, MY + 1), width: 1.5, color: k.rgb(Math.max(0, lipCol.r - 40), Math.max(0, lipCol.g - 20), Math.max(0, lipCol.b - 20)) });
+      k.drawLine({ p1: k.vec2(MX - MW + 2, MY + 1), p2: k.vec2(MX + MW - 2, MY + 1), width: 1.5,
+        color: k.rgb(Math.max(0, lipCol.r - 40), Math.max(0, lipCol.g - 20), Math.max(0, lipCol.b - 20)) });
 
-      // Tap hints — highlight the target area for the current step
+      // Pulsing tap hints
       if (!isDone && !stepDone) {
         const pulse = 0.45 + 0.45 * Math.sin(k.time() * 5);
         drawHint(k, s, pulse);
@@ -358,27 +365,27 @@ function drawHint(k: K, s: string, pulse: number) {
     k.drawText({ text: "👆 TAP FACE", size: 18, pos: k.vec2(FX, FY + FRY + 22), anchor: "center", color: k.rgb(180, 120, 60) });
   }
   if (s === "eyeshadow") {
-    k.drawEllipse({ radiusX: EW + 12, radiusY: EH + 12, pos: k.vec2(ELX, ELY), color: k.rgb(155, 95, 210), opacity: pulse * 0.4 });
-    k.drawEllipse({ radiusX: EW + 12, radiusY: EH + 12, pos: k.vec2(ERX, ERY), color: k.rgb(155, 95, 210), opacity: pulse * 0.4 });
-    k.drawText({ text: "👆 TAP EACH EYE", size: 17, pos: k.vec2(FX, FY + FRY + 22), anchor: "center", color: k.rgb(130, 60, 200) });
+    k.drawEllipse({ radiusX: EW + 14, radiusY: EH + 14, pos: k.vec2(ELX, ELY), color: k.rgb(155, 95, 210), opacity: pulse * 0.4 });
+    k.drawEllipse({ radiusX: EW + 14, radiusY: EH + 14, pos: k.vec2(ERX, ERY), color: k.rgb(155, 95, 210), opacity: pulse * 0.4 });
+    k.drawText({ text: "👆 TAP AN EYE", size: 17, pos: k.vec2(FX, FY + FRY + 22), anchor: "center", color: k.rgb(130, 60, 200) });
   }
   if (s === "eyeliner") {
-    k.drawEllipse({ radiusX: EW + 12, radiusY: EH + 12, pos: k.vec2(ELX, ELY), color: k.rgb(30, 20, 20), opacity: pulse * 0.35 });
-    k.drawEllipse({ radiusX: EW + 12, radiusY: EH + 12, pos: k.vec2(ERX, ERY), color: k.rgb(30, 20, 20), opacity: pulse * 0.35 });
-    k.drawText({ text: "👆 TAP EACH EYE", size: 17, pos: k.vec2(FX, FY + FRY + 22), anchor: "center", color: k.rgb(40, 30, 30) });
+    k.drawEllipse({ radiusX: EW + 14, radiusY: EH + 14, pos: k.vec2(ELX, ELY), color: k.rgb(30, 20, 20), opacity: pulse * 0.35 });
+    k.drawEllipse({ radiusX: EW + 14, radiusY: EH + 14, pos: k.vec2(ERX, ERY), color: k.rgb(30, 20, 20), opacity: pulse * 0.35 });
+    k.drawText({ text: "👆 TAP AN EYE", size: 17, pos: k.vec2(FX, FY + FRY + 22), anchor: "center", color: k.rgb(40, 30, 30) });
   }
   if (s === "mascara") {
-    k.drawEllipse({ radiusX: EW + 12, radiusY: EH + 12, pos: k.vec2(ELX, ELY), color: k.rgb(20, 10, 10), opacity: pulse * 0.3 });
-    k.drawEllipse({ radiusX: EW + 12, radiusY: EH + 12, pos: k.vec2(ERX, ERY), color: k.rgb(20, 10, 10), opacity: pulse * 0.3 });
-    k.drawText({ text: "👆 TAP EACH EYE", size: 17, pos: k.vec2(FX, FY + FRY + 22), anchor: "center", color: k.rgb(40, 30, 30) });
+    k.drawEllipse({ radiusX: EW + 14, radiusY: EH + 14, pos: k.vec2(ELX, ELY), color: k.rgb(20, 10, 10), opacity: pulse * 0.3 });
+    k.drawEllipse({ radiusX: EW + 14, radiusY: EH + 14, pos: k.vec2(ERX, ERY), color: k.rgb(20, 10, 10), opacity: pulse * 0.3 });
+    k.drawText({ text: "👆 TAP AN EYE", size: 17, pos: k.vec2(FX, FY + FRY + 22), anchor: "center", color: k.rgb(40, 30, 30) });
   }
   if (s === "blush") {
-    k.drawCircle({ pos: k.vec2(CLX, CLY), radius: CR + 18, color: k.rgb(255, 140, 170), opacity: pulse * 0.4 });
-    k.drawCircle({ pos: k.vec2(CRX, CRY), radius: CR + 18, color: k.rgb(255, 140, 170), opacity: pulse * 0.4 });
-    k.drawText({ text: "👆 TAP EACH CHEEK", size: 16, pos: k.vec2(FX, FY + FRY + 22), anchor: "center", color: k.rgb(200, 80, 120) });
+    k.drawCircle({ pos: k.vec2(CLX, CLY), radius: CR + 20, color: k.rgb(255, 140, 170), opacity: pulse * 0.4 });
+    k.drawCircle({ pos: k.vec2(CRX, CRY), radius: CR + 20, color: k.rgb(255, 140, 170), opacity: pulse * 0.4 });
+    k.drawText({ text: "👆 TAP A CHEEK", size: 17, pos: k.vec2(FX, FY + FRY + 22), anchor: "center", color: k.rgb(200, 80, 120) });
   }
   if (s === "lipstick") {
-    k.drawEllipse({ radiusX: MW + 10, radiusY: MH + 10, pos: k.vec2(MX, MY), color: k.rgb(210, 38, 85), opacity: pulse * 0.4 });
+    k.drawEllipse({ radiusX: MW + 12, radiusY: MH + 12, pos: k.vec2(MX, MY), color: k.rgb(210, 38, 85), opacity: pulse * 0.4 });
     k.drawText({ text: "👆 TAP THE LIPS", size: 17, pos: k.vec2(FX, FY + FRY + 22), anchor: "center", color: k.rgb(180, 30, 70) });
   }
 }
@@ -402,12 +409,7 @@ function drawLashes(k: K, ex: number, ey: number, ew: number, eh: number) {
 }
 
 // ── Eyeliner drawing ──────────────────────────────────────────────────────────
-function drawEyeliner(k: K, ex: number, ey: number, ew: number, eh: number, _flip: boolean) {
+function drawEyeliner(k: K, ex: number, ey: number, ew: number, eh: number) {
   k.drawLine({ p1: k.vec2(ex - ew, ey + eh * 0.3), p2: k.vec2(ex + ew, ey + eh * 0.3), width: 2.5, color: k.rgb(12, 8, 8) });
   k.drawLine({ p1: k.vec2(ex - ew, ey - eh * 0.3), p2: k.vec2(ex + ew, ey - eh * 0.3), width: 2.5, color: k.rgb(12, 8, 8) });
 }
-
-function brushColor(_step: string): [number, number, number] {
-  return [200, 200, 200];
-}
-brushColor; // referenced to suppress unused warning
