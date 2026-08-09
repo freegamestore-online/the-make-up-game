@@ -1,5 +1,5 @@
 {
-  "name": "@APPNAME/web",
+  "name": "@the-make-up-game/web",
   "private": true,
   "type": "module",
   "scripts": {
