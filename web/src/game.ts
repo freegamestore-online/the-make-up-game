@@ -6,29 +6,30 @@ const VW = 400;
 const VH = 680;
 
 // Skin tones
-const SKIN: [number, number, number]    = [242, 200, 168];
+const SKIN: [number, number, number]      = [242, 200, 168];
 const SKIN_DARK: [number, number, number] = [210, 160, 120];
 
-// Hair colours — bubblegum pink!
-const HAIR: [number, number, number]      = [255, 105, 180];
-const HAIR_DARK: [number, number, number] = [220, 60, 140];
-const HAIR_SHINE: [number, number, number] = [255, 180, 220];
+// Hair palette — pink with depth
+const H_ROOT:  [number, number, number] = [190,  50, 110]; // darkest roots
+const H_MID:   [number, number, number] = [240,  90, 160]; // mid tone
+const H_LIGHT: [number, number, number] = [255, 150, 200]; // lighter strands
+const H_SHINE: [number, number, number] = [255, 210, 235]; // specular highlight
 
 // Face geometry
-const FX = VW / 2;
-const FY = 305;
+const FX  = VW / 2;
+const FY  = 305;
 const FRX = 92;
 const FRY = 115;
 
 // Eyes
 const ELX = FX - 36, ELY = FY - 28;
 const ERX = FX + 36, ERY = FY - 28;
-const EW = 30, EH = 14;
+const EW  = 30, EH = 14;
 
 // Cheeks
 const CLX = FX - 66, CLY = FY + 18;
 const CRX = FX + 66, CRY = FY + 18;
-const CR = 22;
+const CR  = 22;
 
 // Lips
 const MX = FX, MY = FY + 52;
@@ -80,14 +81,14 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
     pixelDensity: Math.min(window.devicePixelRatio || 1, 2),
   });
 
-  let stepIdx    = 0;
-  let stepDone   = false;
-  let foundDone  = false;
-  let shadowDone = false;
-  let linerDone  = false;
+  let stepIdx     = 0;
+  let stepDone    = false;
+  let foundDone   = false;
+  let shadowDone  = false;
+  let linerDone   = false;
   let mascaraDone = false;
-  let blushDone  = false;
-  let lipDone    = false;
+  let blushDone   = false;
+  let lipDone     = false;
   let confetti: Confetti[] = [];
 
   function resetAll() {
@@ -223,7 +224,8 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
       for (let i = 0; i < 6; i++) {
         const bx = 30 + (i * 68) % VW;
         const by = 110 + Math.sin(t0 * 0.8 + i * 1.3) * 10;
-        k.drawText({ text: i % 2 === 0 ? "✨" : "💕", size: 18, pos: k.vec2(bx, by), anchor: "center", opacity: 0.18 });
+        k.drawText({ text: i % 2 === 0 ? "✨" : "💕", size: 18,
+          pos: k.vec2(bx, by), anchor: "center", opacity: 0.18 });
       }
 
       // Shoulders / dress
@@ -245,23 +247,18 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
       k.drawCircle({ pos: k.vec2(FX - FRX - 2, FY + 31), radius: 5, color: k.rgb(255, 100, 180) });
       k.drawCircle({ pos: k.vec2(FX + FRX + 2, FY + 31), radius: 5, color: k.rgb(255, 100, 180) });
 
-      // ── Pink hair (long, layered, wavy) ───────────────────────────────────
-      // Back hair (behind face)
-      k.drawEllipse({ radiusX: FRX + 18, radiusY: FRY * 1.55, pos: k.vec2(FX, FY + 30), color: k.rgb(...HAIR_DARK) });
-      // Side waves
-      k.drawEllipse({ radiusX: 38, radiusY: FRY * 1.1, pos: k.vec2(FX - FRX + 2, FY + 20), color: k.rgb(...HAIR) });
-      k.drawEllipse({ radiusX: 38, radiusY: FRY * 1.1, pos: k.vec2(FX + FRX - 2, FY + 20), color: k.rgb(...HAIR) });
-      // Hair top
-      k.drawEllipse({ radiusX: FRX + 12, radiusY: FRY * 0.55, pos: k.vec2(FX, FY - FRY * 0.52), color: k.rgb(...HAIR) });
-      // Hair shine / highlight streak
-      k.drawEllipse({ radiusX: 22, radiusY: 10, pos: k.vec2(FX - 18, FY - FRY * 0.7), color: k.rgb(...HAIR_SHINE), opacity: 0.55 });
-      k.drawEllipse({ radiusX: 10, radiusY: 5,  pos: k.vec2(FX + 10, FY - FRY * 0.6), color: k.rgb(...HAIR_SHINE), opacity: 0.35 });
+      // ── HAIR (drawn in layers: back → sides → top → strands → shine) ─────
+      drawHair(k);
 
       // ── Face ──────────────────────────────────────────────────────────────
+      // Soft drop shadow
       k.drawEllipse({ radiusX: FRX + 6, radiusY: FRY + 6, pos: k.vec2(FX + 4, FY + 8), color: k.rgb(180, 130, 100), opacity: 0.18 });
+      // Face base
       k.drawEllipse({ radiusX: FRX, radiusY: FRY, pos: k.vec2(FX, FY), color: k.rgb(...SKIN) });
+      // Side contour
       k.drawEllipse({ radiusX: FRX, radiusY: FRY, pos: k.vec2(FX - 6, FY), color: k.rgb(...SKIN_DARK), opacity: 0.12 });
       k.drawEllipse({ radiusX: FRX, radiusY: FRY, pos: k.vec2(FX + 6, FY), color: k.rgb(...SKIN_DARK), opacity: 0.12 });
+      // Forehead highlight
       k.drawEllipse({ radiusX: 38, radiusY: 22, pos: k.vec2(FX, FY - 60), color: k.rgb(255, 240, 225), opacity: 0.45 });
 
       // Foundation shimmer
@@ -339,7 +336,8 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
         const btnColor = showingNext ? k.rgb(220, 60, 130) : k.rgb(100, 60, 200);
         const btnLabel = showingNext ? "Next Step  ➜" : "Play Again 🔄";
         k.drawRect({ pos: k.vec2(BTNX, BTNY), width: BTNW, height: BTNH, radius: 24, color: btnColor });
-        k.drawText({ text: btnLabel, size: 16, pos: k.vec2(VW / 2, BTNY + BTNH / 2), anchor: "center", color: k.rgb(255, 255, 255) });
+        k.drawText({ text: btnLabel, size: 16, pos: k.vec2(VW / 2, BTNY + BTNH / 2),
+          anchor: "center", color: k.rgb(255, 255, 255) });
       }
 
       // Done screen
@@ -348,15 +346,16 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
           k.drawRect({ pos: k.vec2(c.x - 5, c.y - 5), width: 10, height: 10,
             color: k.rgb(...c.color), opacity: c.life, angle: c.angle });
         }
-        const t2 = t0;
         for (let i = 0; i < 12; i++) {
-          const ang = (i / 12) * Math.PI * 2 + t2 * 1.2;
-          const rr  = FRX + 22 + Math.sin(t2 * 3 + i) * 8;
+          const ang = (i / 12) * Math.PI * 2 + t0 * 1.2;
+          const rr  = FRX + 22 + Math.sin(t0 * 3 + i) * 8;
           k.drawCircle({ pos: k.vec2(FX + Math.cos(ang) * rr, FY + Math.sin(ang) * rr * 0.6),
             radius: 4, color: k.rgb(255, 220, 60), opacity: 0.9 });
         }
-        k.drawText({ text: "✨ GORGEOUS! ✨",      size: 30, pos: k.vec2(FX, FY + FRY + 30), anchor: "center", color: k.rgb(200, 40, 120) });
-        k.drawText({ text: "You look amazing! 💖", size: 16, pos: k.vec2(FX, FY + FRY + 64), anchor: "center", color: k.rgb(160, 60, 120) });
+        k.drawText({ text: "✨ GORGEOUS! ✨",      size: 30,
+          pos: k.vec2(FX, FY + FRY + 30), anchor: "center", color: k.rgb(200, 40, 120) });
+        k.drawText({ text: "You look amazing! 💖", size: 16,
+          pos: k.vec2(FX, FY + FRY + 64), anchor: "center", color: k.rgb(160, 60, 120) });
         emojiLbl.text    = "🌟";
         instrLbl.text    = "All done! You're gorgeous!";
         stepCounter.text = `${STEPS.length} / ${STEPS.length}`;
@@ -368,6 +367,124 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
 
   k.go("main");
   return () => k.quit();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HAIR — multi-layer strand system
+// Strategy:
+//   1. Dark mass (back volume, behind face)
+//   2. Wide side curtains with individual strands
+//   3. Crown / top with parting and strand groups
+//   4. Wispy face-framing pieces
+//   5. Specular shine band
+// ─────────────────────────────────────────────────────────────────────────────
+function drawHair(k: K) {
+  // ── 1. Back volume mass ────────────────────────────────────────────────────
+  // Large dark ellipse sitting behind the face for depth
+  k.drawEllipse({ radiusX: FRX + 22, radiusY: FRY * 1.65,
+    pos: k.vec2(FX, FY + 38), color: k.rgb(...H_ROOT) });
+
+  // ── 2. Side curtains — left ────────────────────────────────────────────────
+  // Outer body
+  k.drawEllipse({ radiusX: 46, radiusY: FRY * 1.3,
+    pos: k.vec2(FX - FRX + 4, FY + 28), color: k.rgb(...H_MID) });
+  // Inner shadow crease
+  k.drawEllipse({ radiusX: 20, radiusY: FRY * 1.2,
+    pos: k.vec2(FX - FRX + 28, FY + 28), color: k.rgb(...H_ROOT), opacity: 0.55 });
+  // Individual strands — left side (dark → light)
+  const leftStrandData: [number, number, number, number, number, [number,number,number], number][] = [
+    // [x1, y1, x2, y2, width, color, opacity]
+    [FX - FRX - 10, FY - 80,  FX - FRX - 18, FY + 120, 6,  H_ROOT,  1.0],
+    [FX - FRX - 2,  FY - 90,  FX - FRX - 8,  FY + 140, 5,  H_MID,   1.0],
+    [FX - FRX + 8,  FY - 95,  FX - FRX + 2,  FY + 150, 5,  H_MID,   0.9],
+    [FX - FRX + 18, FY - 90,  FX - FRX + 14, FY + 145, 4,  H_LIGHT, 0.8],
+    [FX - FRX + 28, FY - 85,  FX - FRX + 22, FY + 135, 4,  H_LIGHT, 0.7],
+    [FX - FRX - 14, FY - 60,  FX - FRX - 22, FY + 100, 3,  H_ROOT,  0.85],
+    [FX - FRX + 4,  FY - 70,  FX - FRX - 4,  FY + 110, 3,  H_MID,   0.75],
+  ];
+  for (const [x1, y1, x2, y2, w, col, op] of leftStrandData) {
+    // Slight wave: midpoint offset
+    const mx = (x1 + x2) / 2 - 6;
+    const my = (y1 + y2) / 2;
+    k.drawLine({ p1: k.vec2(x1, y1), p2: k.vec2(mx, my), width: w, color: k.rgb(...col), opacity: op });
+    k.drawLine({ p1: k.vec2(mx, my), p2: k.vec2(x2, y2), width: w * 0.85, color: k.rgb(...col), opacity: op * 0.9 });
+  }
+
+  // ── 3. Side curtains — right ───────────────────────────────────────────────
+  k.drawEllipse({ radiusX: 46, radiusY: FRY * 1.3,
+    pos: k.vec2(FX + FRX - 4, FY + 28), color: k.rgb(...H_MID) });
+  k.drawEllipse({ radiusX: 20, radiusY: FRY * 1.2,
+    pos: k.vec2(FX + FRX - 28, FY + 28), color: k.rgb(...H_ROOT), opacity: 0.55 });
+  const rightStrandData: [number, number, number, number, number, [number,number,number], number][] = [
+    [FX + FRX + 10, FY - 80,  FX + FRX + 18, FY + 120, 6,  H_ROOT,  1.0],
+    [FX + FRX + 2,  FY - 90,  FX + FRX + 8,  FY + 140, 5,  H_MID,   1.0],
+    [FX + FRX - 8,  FY - 95,  FX + FRX - 2,  FY + 150, 5,  H_MID,   0.9],
+    [FX + FRX - 18, FY - 90,  FX + FRX - 14, FY + 145, 4,  H_LIGHT, 0.8],
+    [FX + FRX - 28, FY - 85,  FX + FRX - 22, FY + 135, 4,  H_LIGHT, 0.7],
+    [FX + FRX + 14, FY - 60,  FX + FRX + 22, FY + 100, 3,  H_ROOT,  0.85],
+    [FX + FRX - 4,  FY - 70,  FX + FRX + 4,  FY + 110, 3,  H_MID,   0.75],
+  ];
+  for (const [x1, y1, x2, y2, w, col, op] of rightStrandData) {
+    const mx = (x1 + x2) / 2 + 6;
+    const my = (y1 + y2) / 2;
+    k.drawLine({ p1: k.vec2(x1, y1), p2: k.vec2(mx, my), width: w, color: k.rgb(...col), opacity: op });
+    k.drawLine({ p1: k.vec2(mx, my), p2: k.vec2(x2, y2), width: w * 0.85, color: k.rgb(...col), opacity: op * 0.9 });
+  }
+
+  // ── 4. Crown / top ────────────────────────────────────────────────────────
+  // Solid crown cap
+  k.drawEllipse({ radiusX: FRX + 14, radiusY: FRY * 0.52,
+    pos: k.vec2(FX, FY - FRY * 0.54), color: k.rgb(...H_MID) });
+  // Crown depth — darker at the part line
+  k.drawEllipse({ radiusX: 6, radiusY: FRY * 0.38,
+    pos: k.vec2(FX, FY - FRY * 0.56), color: k.rgb(...H_ROOT), opacity: 0.7 });
+  // Top strands fanning out from crown
+  const crownStrands: [number, number, number, number, number, [number,number,number]][] = [
+    // [startX, startY, endX, endY, width, color]
+    [FX - 4,  FY - FRY * 0.95, FX - 60, FY - FRY * 0.55, 5, H_MID],
+    [FX + 4,  FY - FRY * 0.95, FX + 60, FY - FRY * 0.55, 5, H_MID],
+    [FX - 16, FY - FRY * 0.92, FX - 80, FY - FRY * 0.48, 4, H_LIGHT],
+    [FX + 16, FY - FRY * 0.92, FX + 80, FY - FRY * 0.48, 4, H_LIGHT],
+    [FX - 30, FY - FRY * 0.85, FX - 96, FY - FRY * 0.38, 4, H_MID],
+    [FX + 30, FY - FRY * 0.85, FX + 96, FY - FRY * 0.38, 4, H_MID],
+    [FX - 44, FY - FRY * 0.75, FX - 100,FY - FRY * 0.22, 3, H_ROOT],
+    [FX + 44, FY - FRY * 0.75, FX + 100,FY - FRY * 0.22, 3, H_ROOT],
+    [FX,      FY - FRY * 0.96, FX,      FY - FRY * 0.55, 4, H_ROOT],
+  ];
+  for (const [x1, y1, x2, y2, w, col] of crownStrands) {
+    k.drawLine({ p1: k.vec2(x1, y1), p2: k.vec2(x2, y2), width: w, color: k.rgb(...col) });
+  }
+
+  // ── 5. Face-framing wisps ─────────────────────────────────────────────────
+  // Left side wispy tendrils near face edge
+  const wispL: [number, number, number, number, number][] = [
+    [FX - FRX + 6,  FY - 60, FX - FRX - 2,  FY + 20, 2],
+    [FX - FRX + 12, FY - 50, FX - FRX + 4,  FY + 30, 2],
+    [FX - FRX + 18, FY - 40, FX - FRX + 12, FY + 15, 1],
+  ];
+  for (const [x1, y1, x2, y2, w] of wispL) {
+    k.drawLine({ p1: k.vec2(x1, y1), p2: k.vec2(x2, y2), width: w, color: k.rgb(...H_LIGHT), opacity: 0.7 });
+  }
+  // Right side
+  const wispR: [number, number, number, number, number][] = [
+    [FX + FRX - 6,  FY - 60, FX + FRX + 2,  FY + 20, 2],
+    [FX + FRX - 12, FY - 50, FX + FRX - 4,  FY + 30, 2],
+    [FX + FRX - 18, FY - 40, FX + FRX - 12, FY + 15, 1],
+  ];
+  for (const [x1, y1, x2, y2, w] of wispR) {
+    k.drawLine({ p1: k.vec2(x1, y1), p2: k.vec2(x2, y2), width: w, color: k.rgb(...H_LIGHT), opacity: 0.7 });
+  }
+
+  // ── 6. Specular shine band ────────────────────────────────────────────────
+  // Main shine — off-centre for realism
+  k.drawEllipse({ radiusX: 28, radiusY: 9,
+    pos: k.vec2(FX - 14, FY - FRY * 0.72), color: k.rgb(...H_SHINE), opacity: 0.55 });
+  // Secondary smaller shine
+  k.drawEllipse({ radiusX: 12, radiusY: 5,
+    pos: k.vec2(FX + 20, FY - FRY * 0.62), color: k.rgb(...H_SHINE), opacity: 0.32 });
+  // Tiny hot-spot
+  k.drawCircle({ pos: k.vec2(FX - 10, FY - FRY * 0.74), radius: 4,
+    color: k.rgb(255, 240, 250), opacity: 0.6 });
 }
 
 // ── Arched brow ───────────────────────────────────────────────────────────────
@@ -407,7 +524,8 @@ function drawLashes(k: K, ex: number, ey: number, ew: number, eh: number) {
     const t  = i / 5 - 0.5;
     const bx = ex + t * ew * 1.6;
     const by = ey + eh * 0.85;
-    k.drawLine({ p1: k.vec2(bx, by), p2: k.vec2(bx, by + 5), width: 1.5, color: k.rgb(8, 5, 5), opacity: 0.7 });
+    k.drawLine({ p1: k.vec2(bx, by), p2: k.vec2(bx, by + 5),
+      width: 1.5, color: k.rgb(8, 5, 5), opacity: 0.7 });
   }
 }
 
@@ -422,13 +540,13 @@ function drawNose(k: K, nx: number, ny: number) {
 
 // ── Fuller lips with cupid's bow ──────────────────────────────────────────────
 function drawLips(k: K, lipDone: boolean) {
-  const lipBase = lipDone ? k.rgb(215, 35, 80)  : k.rgb(200, 130, 110);
-  const lipDark = lipDone ? k.rgb(160, 20, 55)  : k.rgb(170, 100, 85);
+  const lipBase = lipDone ? k.rgb(215, 35, 80)   : k.rgb(200, 130, 110);
+  const lipDark = lipDone ? k.rgb(160, 20, 55)   : k.rgb(170, 100, 85);
   const lipHi   = lipDone ? k.rgb(255, 120, 150) : k.rgb(230, 170, 150);
 
-  k.drawEllipse({ radiusX: MW,        radiusY: MH,        pos: k.vec2(MX, MY + 6),  color: lipBase });
-  k.drawEllipse({ radiusX: MW * 0.55, radiusY: MH * 0.8,  pos: k.vec2(MX - 14, MY - 5), color: lipBase });
-  k.drawEllipse({ radiusX: MW * 0.55, radiusY: MH * 0.8,  pos: k.vec2(MX + 14, MY - 5), color: lipBase });
+  k.drawEllipse({ radiusX: MW,        radiusY: MH,       pos: k.vec2(MX, MY + 6),      color: lipBase });
+  k.drawEllipse({ radiusX: MW * 0.55, radiusY: MH * 0.8, pos: k.vec2(MX - 14, MY - 5), color: lipBase });
+  k.drawEllipse({ radiusX: MW * 0.55, radiusY: MH * 0.8, pos: k.vec2(MX + 14, MY - 5), color: lipBase });
   k.drawLine({ p1: k.vec2(MX - 5, MY - 4), p2: k.vec2(MX + 5, MY - 4), width: 2, color: lipDark, opacity: 0.5 });
   k.drawLine({ p1: k.vec2(MX - MW + 3, MY + 2), p2: k.vec2(MX + MW - 3, MY + 2), width: 1.5, color: lipDark, opacity: 0.6 });
   k.drawEllipse({ radiusX: 12, radiusY: 5, pos: k.vec2(MX, MY + 5), color: lipHi, opacity: 0.45 });
@@ -436,29 +554,30 @@ function drawLips(k: K, lipDone: boolean) {
 
 // ── Hint overlays ─────────────────────────────────────────────────────────────
 function drawHint(k: K, s: string, pulse: number) {
-  const ELX = FX - 36, ELY = FY - 28, ERX = FX + 36, ERY = FY - 28;
-  const EW = 30, EH = 14;
-  const CLX = FX - 66, CLY = FY + 18, CRX = FX + 66, CRY = FY + 18;
-  const CR = 22;
-  const MX = FX, MY = FY + 52, MW = 38, MH = 15;
+  const hELX = FX - 36, hELY = FY - 28, hERX = FX + 36, hERY = FY - 28;
+  const hEW = 30, hEH = 14;
+  const hCLX = FX - 66, hCLY = FY + 18, hCRX = FX + 66, hCRY = FY + 18;
+  const hCR = 22;
+  const hMX = FX, hMY = FY + 52, hMW = 38, hMH = 15;
 
   k.drawEllipse({ radiusX: FRX + 12, radiusY: FRY + 12, pos: k.vec2(FX, FY),
     color: k.rgb(220, 60, 130), opacity: pulse * 0.2 });
 
   if (s === "eyeshadow") {
-    k.drawEllipse({ radiusX: EW + 14, radiusY: EH + 14, pos: k.vec2(ELX, ELY), color: k.rgb(155, 95, 210), opacity: pulse * 0.5 });
-    k.drawEllipse({ radiusX: EW + 14, radiusY: EH + 14, pos: k.vec2(ERX, ERY), color: k.rgb(155, 95, 210), opacity: pulse * 0.5 });
+    k.drawEllipse({ radiusX: hEW + 14, radiusY: hEH + 14, pos: k.vec2(hELX, hELY), color: k.rgb(155, 95, 210), opacity: pulse * 0.5 });
+    k.drawEllipse({ radiusX: hEW + 14, radiusY: hEH + 14, pos: k.vec2(hERX, hERY), color: k.rgb(155, 95, 210), opacity: pulse * 0.5 });
   }
   if (s === "eyeliner" || s === "mascara") {
-    k.drawEllipse({ radiusX: EW + 14, radiusY: EH + 14, pos: k.vec2(ELX, ELY), color: k.rgb(30, 20, 20), opacity: pulse * 0.4 });
-    k.drawEllipse({ radiusX: EW + 14, radiusY: EH + 14, pos: k.vec2(ERX, ERY), color: k.rgb(30, 20, 20), opacity: pulse * 0.4 });
+    k.drawEllipse({ radiusX: hEW + 14, radiusY: hEH + 14, pos: k.vec2(hELX, hELY), color: k.rgb(30, 20, 20), opacity: pulse * 0.4 });
+    k.drawEllipse({ radiusX: hEW + 14, radiusY: hEH + 14, pos: k.vec2(hERX, hERY), color: k.rgb(30, 20, 20), opacity: pulse * 0.4 });
   }
   if (s === "blush") {
-    k.drawCircle({ pos: k.vec2(CLX, CLY), radius: CR + 20, color: k.rgb(255, 140, 170), opacity: pulse * 0.5 });
-    k.drawCircle({ pos: k.vec2(CRX, CRY), radius: CR + 20, color: k.rgb(255, 140, 170), opacity: pulse * 0.5 });
+    k.drawCircle({ pos: k.vec2(hCLX, hCLY), radius: hCR + 20, color: k.rgb(255, 140, 170), opacity: pulse * 0.5 });
+    k.drawCircle({ pos: k.vec2(hCRX, hCRY), radius: hCR + 20, color: k.rgb(255, 140, 170), opacity: pulse * 0.5 });
   }
   if (s === "lipstick") {
-    k.drawEllipse({ radiusX: MW + 14, radiusY: MH + 14, pos: k.vec2(MX, MY), color: k.rgb(210, 38, 85), opacity: pulse * 0.5 });
+    k.drawEllipse({ radiusX: hMW + 14, radiusY: hMH + 14, pos: k.vec2(hMX, hMY),
+      color: k.rgb(210, 38, 85), opacity: pulse * 0.5 });
   }
 
   k.drawText({ text: "👆 TAP THE FACE", size: 18, pos: k.vec2(FX, FY + FRY + 24),
