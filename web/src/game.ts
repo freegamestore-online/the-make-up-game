@@ -10,10 +10,10 @@ const SKIN: [number, number, number]      = [242, 200, 168];
 const SKIN_DARK: [number, number, number] = [210, 160, 120];
 
 // Hair palette — pink with depth
-const H_ROOT:  [number, number, number] = [190,  50, 110]; // darkest roots
-const H_MID:   [number, number, number] = [240,  90, 160]; // mid tone
-const H_LIGHT: [number, number, number] = [255, 150, 200]; // lighter strands
-const H_SHINE: [number, number, number] = [255, 210, 235]; // specular highlight
+const H_ROOT:  [number, number, number] = [190,  50, 110];
+const H_MID:   [number, number, number] = [240,  90, 160];
+const H_LIGHT: [number, number, number] = [255, 150, 200];
+const H_SHINE: [number, number, number] = [255, 210, 235];
 
 // Face geometry
 const FX  = VW / 2;
@@ -247,21 +247,16 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
       k.drawCircle({ pos: k.vec2(FX - FRX - 2, FY + 31), radius: 5, color: k.rgb(255, 100, 180) });
       k.drawCircle({ pos: k.vec2(FX + FRX + 2, FY + 31), radius: 5, color: k.rgb(255, 100, 180) });
 
-      // ── HAIR (drawn in layers: back → sides → top → strands → shine) ─────
+      // Hair (behind face)
       drawHair(k);
 
       // ── Face ──────────────────────────────────────────────────────────────
-      // Soft drop shadow
       k.drawEllipse({ radiusX: FRX + 6, radiusY: FRY + 6, pos: k.vec2(FX + 4, FY + 8), color: k.rgb(180, 130, 100), opacity: 0.18 });
-      // Face base
       k.drawEllipse({ radiusX: FRX, radiusY: FRY, pos: k.vec2(FX, FY), color: k.rgb(...SKIN) });
-      // Side contour
       k.drawEllipse({ radiusX: FRX, radiusY: FRY, pos: k.vec2(FX - 6, FY), color: k.rgb(...SKIN_DARK), opacity: 0.12 });
       k.drawEllipse({ radiusX: FRX, radiusY: FRY, pos: k.vec2(FX + 6, FY), color: k.rgb(...SKIN_DARK), opacity: 0.12 });
-      // Forehead highlight
       k.drawEllipse({ radiusX: 38, radiusY: 22, pos: k.vec2(FX, FY - 60), color: k.rgb(255, 240, 225), opacity: 0.45 });
 
-      // Foundation shimmer
       if (foundDone) {
         k.drawEllipse({ radiusX: FRX - 4, radiusY: FRY - 4, pos: k.vec2(FX, FY), color: k.rgb(255, 225, 195), opacity: 0.28 });
         k.drawEllipse({ radiusX: 18, radiusY: 10, pos: k.vec2(FX - 50, FY - 10), color: k.rgb(255, 240, 220), opacity: 0.35 });
@@ -272,7 +267,7 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
       drawBrow(k, ELX, ELY, false);
       drawBrow(k, ERX, ERY, true);
 
-      // Eye shadow
+      // Eye shadow (behind eyeball)
       if (shadowDone) {
         k.drawEllipse({ radiusX: EW + 9, radiusY: EH + 10, pos: k.vec2(ELX, ELY - 3), color: k.rgb(120, 60, 190), opacity: 0.55 });
         k.drawEllipse({ radiusX: EW + 9, radiusY: EH + 10, pos: k.vec2(ERX, ERY - 3), color: k.rgb(120, 60, 190), opacity: 0.55 });
@@ -280,24 +275,21 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
         k.drawEllipse({ radiusX: EW + 4, radiusY: EH + 5,  pos: k.vec2(ERX, ERY - 1), color: k.rgb(200, 150, 255), opacity: 0.45 });
       }
 
-      // Eyes
-      k.drawEllipse({ radiusX: EW, radiusY: EH, pos: k.vec2(ELX, ELY), color: k.rgb(255, 255, 255) });
-      k.drawEllipse({ radiusX: EW, radiusY: EH, pos: k.vec2(ERX, ERY), color: k.rgb(255, 255, 255) });
-      k.drawCircle({ pos: k.vec2(ELX, ELY), radius: 9, color: k.rgb(80, 140, 70) });
-      k.drawCircle({ pos: k.vec2(ERX, ERY), radius: 9, color: k.rgb(80, 140, 70) });
-      k.drawCircle({ pos: k.vec2(ELX, ELY), radius: 9, color: k.rgb(40, 80, 30), opacity: 0.5 });
-      k.drawCircle({ pos: k.vec2(ERX, ERY), radius: 9, color: k.rgb(40, 80, 30), opacity: 0.5 });
-      k.drawCircle({ pos: k.vec2(ELX, ELY), radius: 5, color: k.rgb(10, 8, 8) });
-      k.drawCircle({ pos: k.vec2(ERX, ERY), radius: 5, color: k.rgb(10, 8, 8) });
-      k.drawCircle({ pos: k.vec2(ELX + 3, ELY - 3), radius: 2.5, color: k.rgb(255, 255, 255) });
-      k.drawCircle({ pos: k.vec2(ERX + 3, ERY - 3), radius: 2.5, color: k.rgb(255, 255, 255) });
-      k.drawCircle({ pos: k.vec2(ELX - 2, ELY + 2), radius: 1.2, color: k.rgb(255, 255, 255), opacity: 0.6 });
-      k.drawCircle({ pos: k.vec2(ERX - 2, ERY + 2), radius: 1.2, color: k.rgb(255, 255, 255), opacity: 0.6 });
+      // ── Eyes (drawn as a helper so we can re-draw them on top of liner) ───
+      drawEyeballs(k);
 
-      // Eyeliner
-      if (linerDone) { drawEyeliner(k, ELX, ELY, EW, EH); drawEyeliner(k, ERX, ERY, EW, EH); }
+      // ── Eyeliner — drawn ON TOP of eyeball, hugging the lid edges ─────────
+      // The liner traces the upper lid arc and lower lid arc using short
+      // segments sampled from the ellipse boundary, so it never cuts across
+      // the eyeball itself.
+      if (linerDone) {
+        drawEyeliner(k, ELX, ELY, EW, EH);
+        drawEyeliner(k, ERX, ERY, EW, EH);
+        // Re-draw catchlights so they stay visible above the liner
+        drawCatchlights(k);
+      }
 
-      // Mascara
+      // Mascara / lashes (always on top of liner)
       if (mascaraDone) { drawLashes(k, ELX, ELY, EW, EH); drawLashes(k, ERX, ERY, EW, EH); }
 
       // Nose
@@ -369,122 +361,93 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
   return () => k.quit();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HAIR — multi-layer strand system
-// Strategy:
-//   1. Dark mass (back volume, behind face)
-//   2. Wide side curtains with individual strands
-//   3. Crown / top with parting and strand groups
-//   4. Wispy face-framing pieces
-//   5. Specular shine band
-// ─────────────────────────────────────────────────────────────────────────────
-function drawHair(k: K) {
-  // ── 1. Back volume mass ────────────────────────────────────────────────────
-  // Large dark ellipse sitting behind the face for depth
-  k.drawEllipse({ radiusX: FRX + 22, radiusY: FRY * 1.65,
-    pos: k.vec2(FX, FY + 38), color: k.rgb(...H_ROOT) });
+// ── Eyeballs (whites → iris → pupil) ─────────────────────────────────────────
+function drawEyeballs(k: K) {
+  // Whites
+  k.drawEllipse({ radiusX: EW, radiusY: EH, pos: k.vec2(ELX, ELY), color: k.rgb(255, 255, 255) });
+  k.drawEllipse({ radiusX: EW, radiusY: EH, pos: k.vec2(ERX, ERY), color: k.rgb(255, 255, 255) });
+  // Iris
+  k.drawCircle({ pos: k.vec2(ELX, ELY), radius: 9, color: k.rgb(80, 140, 70) });
+  k.drawCircle({ pos: k.vec2(ERX, ERY), radius: 9, color: k.rgb(80, 140, 70) });
+  k.drawCircle({ pos: k.vec2(ELX, ELY), radius: 9, color: k.rgb(40, 80, 30), opacity: 0.5 });
+  k.drawCircle({ pos: k.vec2(ERX, ERY), radius: 9, color: k.rgb(40, 80, 30), opacity: 0.5 });
+  // Pupil
+  k.drawCircle({ pos: k.vec2(ELX, ELY), radius: 5, color: k.rgb(10, 8, 8) });
+  k.drawCircle({ pos: k.vec2(ERX, ERY), radius: 5, color: k.rgb(10, 8, 8) });
+}
 
-  // ── 2. Side curtains — left ────────────────────────────────────────────────
-  // Outer body
-  k.drawEllipse({ radiusX: 46, radiusY: FRY * 1.3,
-    pos: k.vec2(FX - FRX + 4, FY + 28), color: k.rgb(...H_MID) });
-  // Inner shadow crease
-  k.drawEllipse({ radiusX: 20, radiusY: FRY * 1.2,
-    pos: k.vec2(FX - FRX + 28, FY + 28), color: k.rgb(...H_ROOT), opacity: 0.55 });
-  // Individual strands — left side (dark → light)
-  const leftStrandData: [number, number, number, number, number, [number,number,number], number][] = [
-    // [x1, y1, x2, y2, width, color, opacity]
-    [FX - FRX - 10, FY - 80,  FX - FRX - 18, FY + 120, 6,  H_ROOT,  1.0],
-    [FX - FRX - 2,  FY - 90,  FX - FRX - 8,  FY + 140, 5,  H_MID,   1.0],
-    [FX - FRX + 8,  FY - 95,  FX - FRX + 2,  FY + 150, 5,  H_MID,   0.9],
-    [FX - FRX + 18, FY - 90,  FX - FRX + 14, FY + 145, 4,  H_LIGHT, 0.8],
-    [FX - FRX + 28, FY - 85,  FX - FRX + 22, FY + 135, 4,  H_LIGHT, 0.7],
-    [FX - FRX - 14, FY - 60,  FX - FRX - 22, FY + 100, 3,  H_ROOT,  0.85],
-    [FX - FRX + 4,  FY - 70,  FX - FRX - 4,  FY + 110, 3,  H_MID,   0.75],
-  ];
-  for (const [x1, y1, x2, y2, w, col, op] of leftStrandData) {
-    // Slight wave: midpoint offset
-    const mx = (x1 + x2) / 2 - 6;
-    const my = (y1 + y2) / 2;
-    k.drawLine({ p1: k.vec2(x1, y1), p2: k.vec2(mx, my), width: w, color: k.rgb(...col), opacity: op });
-    k.drawLine({ p1: k.vec2(mx, my), p2: k.vec2(x2, y2), width: w * 0.85, color: k.rgb(...col), opacity: op * 0.9 });
+// ── Catchlights ───────────────────────────────────────────────────────────────
+function drawCatchlights(k: K) {
+  k.drawCircle({ pos: k.vec2(ELX + 3, ELY - 3), radius: 2.5, color: k.rgb(255, 255, 255) });
+  k.drawCircle({ pos: k.vec2(ERX + 3, ERY - 3), radius: 2.5, color: k.rgb(255, 255, 255) });
+  k.drawCircle({ pos: k.vec2(ELX - 2, ELY + 2), radius: 1.2, color: k.rgb(255, 255, 255), opacity: 0.6 });
+  k.drawCircle({ pos: k.vec2(ERX - 2, ERY + 2), radius: 1.2, color: k.rgb(255, 255, 255), opacity: 0.6 });
+}
+
+// ── Eyeliner — traces the lid edges, never crosses the eyeball ────────────────
+// Samples points along the TOP half of the eye ellipse for the upper lid line,
+// and the BOTTOM half for the lower waterline. A winged flick extends from the
+// outer corner of the upper lid outward.
+function drawEyeliner(k: K, ex: number, ey: number, ew: number, eh: number) {
+  const SEGS = 12;
+
+  // Upper lid — trace from inner (left) corner to outer (right) corner
+  // along the top arc of the ellipse (angle π → 0, i.e. left to right)
+  for (let i = 0; i < SEGS; i++) {
+    const a0 = Math.PI - (i / SEGS) * Math.PI;       // π → 0
+    const a1 = Math.PI - ((i + 1) / SEGS) * Math.PI;
+    const x0 = ex + Math.cos(a0) * ew;
+    const y0 = ey + Math.sin(a0) * eh;               // top arc: sin is negative here → above centre
+    const x1 = ex + Math.cos(a1) * ew;
+    const y1 = ey + Math.sin(a1) * eh;
+    k.drawLine({ p1: k.vec2(x0, y0), p2: k.vec2(x1, y1), width: 2.5, color: k.rgb(10, 5, 5) });
   }
 
-  // ── 3. Side curtains — right ───────────────────────────────────────────────
-  k.drawEllipse({ radiusX: 46, radiusY: FRY * 1.3,
-    pos: k.vec2(FX + FRX - 4, FY + 28), color: k.rgb(...H_MID) });
-  k.drawEllipse({ radiusX: 20, radiusY: FRY * 1.2,
-    pos: k.vec2(FX + FRX - 28, FY + 28), color: k.rgb(...H_ROOT), opacity: 0.55 });
-  const rightStrandData: [number, number, number, number, number, [number,number,number], number][] = [
-    [FX + FRX + 10, FY - 80,  FX + FRX + 18, FY + 120, 6,  H_ROOT,  1.0],
-    [FX + FRX + 2,  FY - 90,  FX + FRX + 8,  FY + 140, 5,  H_MID,   1.0],
-    [FX + FRX - 8,  FY - 95,  FX + FRX - 2,  FY + 150, 5,  H_MID,   0.9],
-    [FX + FRX - 18, FY - 90,  FX + FRX - 14, FY + 145, 4,  H_LIGHT, 0.8],
-    [FX + FRX - 28, FY - 85,  FX + FRX - 22, FY + 135, 4,  H_LIGHT, 0.7],
-    [FX + FRX + 14, FY - 60,  FX + FRX + 22, FY + 100, 3,  H_ROOT,  0.85],
-    [FX + FRX - 4,  FY - 70,  FX + FRX + 4,  FY + 110, 3,  H_MID,   0.75],
-  ];
-  for (const [x1, y1, x2, y2, w, col, op] of rightStrandData) {
-    const mx = (x1 + x2) / 2 + 6;
-    const my = (y1 + y2) / 2;
-    k.drawLine({ p1: k.vec2(x1, y1), p2: k.vec2(mx, my), width: w, color: k.rgb(...col), opacity: op });
-    k.drawLine({ p1: k.vec2(mx, my), p2: k.vec2(x2, y2), width: w * 0.85, color: k.rgb(...col), opacity: op * 0.9 });
+  // Lower waterline — trace bottom arc, thinner
+  for (let i = 0; i < SEGS; i++) {
+    const a0 = (i / SEGS) * Math.PI;                 // 0 → π (bottom arc)
+    const a1 = ((i + 1) / SEGS) * Math.PI;
+    const x0 = ex + Math.cos(a0) * ew;
+    const y0 = ey + Math.sin(a0) * eh;
+    const x1 = ex + Math.cos(a1) * ew;
+    const y1 = ey + Math.sin(a1) * eh;
+    k.drawLine({ p1: k.vec2(x0, y0), p2: k.vec2(x1, y1), width: 1.2, color: k.rgb(10, 5, 5), opacity: 0.7 });
   }
 
-  // ── 4. Crown / top ────────────────────────────────────────────────────────
-  // Solid crown cap
-  k.drawEllipse({ radiusX: FRX + 14, radiusY: FRY * 0.52,
-    pos: k.vec2(FX, FY - FRY * 0.54), color: k.rgb(...H_MID) });
-  // Crown depth — darker at the part line
-  k.drawEllipse({ radiusX: 6, radiusY: FRY * 0.38,
-    pos: k.vec2(FX, FY - FRY * 0.56), color: k.rgb(...H_ROOT), opacity: 0.7 });
-  // Top strands fanning out from crown
-  const crownStrands: [number, number, number, number, number, [number,number,number]][] = [
-    // [startX, startY, endX, endY, width, color]
-    [FX - 4,  FY - FRY * 0.95, FX - 60, FY - FRY * 0.55, 5, H_MID],
-    [FX + 4,  FY - FRY * 0.95, FX + 60, FY - FRY * 0.55, 5, H_MID],
-    [FX - 16, FY - FRY * 0.92, FX - 80, FY - FRY * 0.48, 4, H_LIGHT],
-    [FX + 16, FY - FRY * 0.92, FX + 80, FY - FRY * 0.48, 4, H_LIGHT],
-    [FX - 30, FY - FRY * 0.85, FX - 96, FY - FRY * 0.38, 4, H_MID],
-    [FX + 30, FY - FRY * 0.85, FX + 96, FY - FRY * 0.38, 4, H_MID],
-    [FX - 44, FY - FRY * 0.75, FX - 100,FY - FRY * 0.22, 3, H_ROOT],
-    [FX + 44, FY - FRY * 0.75, FX + 100,FY - FRY * 0.22, 3, H_ROOT],
-    [FX,      FY - FRY * 0.96, FX,      FY - FRY * 0.55, 4, H_ROOT],
-  ];
-  for (const [x1, y1, x2, y2, w, col] of crownStrands) {
-    k.drawLine({ p1: k.vec2(x1, y1), p2: k.vec2(x2, y2), width: w, color: k.rgb(...col) });
-  }
+  // Wing flick — extends from outer corner of upper lid
+  const outerX = ex + ew;
+  const outerY = ey;                                  // rightmost point of ellipse
+  const wingX  = outerX + 8;
+  const wingY  = outerY - eh * 0.9;                  // flick upward & outward
+  k.drawLine({ p1: k.vec2(outerX, outerY), p2: k.vec2(wingX, wingY), width: 2, color: k.rgb(10, 5, 5) });
+}
 
-  // ── 5. Face-framing wisps ─────────────────────────────────────────────────
-  // Left side wispy tendrils near face edge
-  const wispL: [number, number, number, number, number][] = [
-    [FX - FRX + 6,  FY - 60, FX - FRX - 2,  FY + 20, 2],
-    [FX - FRX + 12, FY - 50, FX - FRX + 4,  FY + 30, 2],
-    [FX - FRX + 18, FY - 40, FX - FRX + 12, FY + 15, 1],
-  ];
-  for (const [x1, y1, x2, y2, w] of wispL) {
-    k.drawLine({ p1: k.vec2(x1, y1), p2: k.vec2(x2, y2), width: w, color: k.rgb(...H_LIGHT), opacity: 0.7 });
+// ── Long fluttery lashes ──────────────────────────────────────────────────────
+function drawLashes(k: K, ex: number, ey: number, ew: number, eh: number) {
+  const count = 10;
+  for (let i = 0; i < count; i++) {
+    const t   = i / (count - 1) - 0.5;
+    // Root sits on the top arc of the eye ellipse
+    const ang = Math.PI + t * Math.PI;               // top half: π to 2π
+    const bx  = ex + Math.cos(ang) * ew;
+    const by  = ey + Math.sin(ang) * eh;
+    const lean = t * 0.7 - 0.1;
+    const len  = 11 + Math.abs(t) * 7;
+    k.drawLine({
+      p1: k.vec2(bx, by),
+      p2: k.vec2(bx + Math.sin(lean) * len * 0.35, by - Math.cos(lean) * len),
+      width: 2.4, color: k.rgb(8, 5, 5),
+    });
   }
-  // Right side
-  const wispR: [number, number, number, number, number][] = [
-    [FX + FRX - 6,  FY - 60, FX + FRX + 2,  FY + 20, 2],
-    [FX + FRX - 12, FY - 50, FX + FRX - 4,  FY + 30, 2],
-    [FX + FRX - 18, FY - 40, FX + FRX - 12, FY + 15, 1],
-  ];
-  for (const [x1, y1, x2, y2, w] of wispR) {
-    k.drawLine({ p1: k.vec2(x1, y1), p2: k.vec2(x2, y2), width: w, color: k.rgb(...H_LIGHT), opacity: 0.7 });
+  // Lower lashes — root on the bottom arc
+  for (let i = 0; i < 6; i++) {
+    const t  = i / 5 - 0.5;
+    const ang = t * Math.PI;                          // bottom half: -π/2 to π/2
+    const bx = ex + Math.cos(ang) * ew * 0.8;
+    const by = ey + Math.sin(ang) * eh + eh * 0.5;
+    k.drawLine({ p1: k.vec2(bx, by), p2: k.vec2(bx, by + 5),
+      width: 1.5, color: k.rgb(8, 5, 5), opacity: 0.7 });
   }
-
-  // ── 6. Specular shine band ────────────────────────────────────────────────
-  // Main shine — off-centre for realism
-  k.drawEllipse({ radiusX: 28, radiusY: 9,
-    pos: k.vec2(FX - 14, FY - FRY * 0.72), color: k.rgb(...H_SHINE), opacity: 0.55 });
-  // Secondary smaller shine
-  k.drawEllipse({ radiusX: 12, radiusY: 5,
-    pos: k.vec2(FX + 20, FY - FRY * 0.62), color: k.rgb(...H_SHINE), opacity: 0.32 });
-  // Tiny hot-spot
-  k.drawCircle({ pos: k.vec2(FX - 10, FY - FRY * 0.74), radius: 4,
-    color: k.rgb(255, 240, 250), opacity: 0.6 });
 }
 
 // ── Arched brow ───────────────────────────────────────────────────────────────
@@ -495,38 +458,6 @@ function drawBrow(k: K, ex: number, ey: number, flip: boolean) {
   const x2 = ex - dir * 22,  y2 = ey - 20;
   k.drawLine({ p1: k.vec2(x0, y0), p2: k.vec2(x1, y1), width: 4, color: k.rgb(55, 28, 10) });
   k.drawLine({ p1: k.vec2(x1, y1), p2: k.vec2(x2, y2), width: 3, color: k.rgb(55, 28, 10) });
-}
-
-// ── Winged eyeliner ───────────────────────────────────────────────────────────
-function drawEyeliner(k: K, ex: number, ey: number, ew: number, eh: number) {
-  k.drawLine({ p1: k.vec2(ex - ew, ey - eh * 0.2), p2: k.vec2(ex + ew, ey - eh * 0.2), width: 2.5, color: k.rgb(10, 5, 5) });
-  k.drawLine({ p1: k.vec2(ex - ew + 4, ey + eh * 0.55), p2: k.vec2(ex + ew - 4, ey + eh * 0.55), width: 1.5, color: k.rgb(10, 5, 5) });
-  const wx = ex + ew + 6, wy = ey - eh * 0.5;
-  k.drawLine({ p1: k.vec2(ex + ew, ey - eh * 0.2), p2: k.vec2(wx, wy), width: 2, color: k.rgb(10, 5, 5) });
-}
-
-// ── Long fluttery lashes ──────────────────────────────────────────────────────
-function drawLashes(k: K, ex: number, ey: number, ew: number, eh: number) {
-  const count = 10;
-  for (let i = 0; i < count; i++) {
-    const t   = i / (count - 1) - 0.5;
-    const bx  = ex + t * ew * 2;
-    const by  = ey - eh * 0.85;
-    const ang = t * 0.7 - 0.1;
-    const len = 11 + Math.abs(t) * 7;
-    k.drawLine({
-      p1: k.vec2(bx, by),
-      p2: k.vec2(bx + Math.sin(ang) * len * 0.35, by - Math.cos(ang) * len),
-      width: 2.4, color: k.rgb(8, 5, 5),
-    });
-  }
-  for (let i = 0; i < 6; i++) {
-    const t  = i / 5 - 0.5;
-    const bx = ex + t * ew * 1.6;
-    const by = ey + eh * 0.85;
-    k.drawLine({ p1: k.vec2(bx, by), p2: k.vec2(bx, by + 5),
-      width: 1.5, color: k.rgb(8, 5, 5), opacity: 0.7 });
-  }
 }
 
 // ── Cute button nose ──────────────────────────────────────────────────────────
@@ -576,10 +507,106 @@ function drawHint(k: K, s: string, pulse: number) {
     k.drawCircle({ pos: k.vec2(hCRX, hCRY), radius: hCR + 20, color: k.rgb(255, 140, 170), opacity: pulse * 0.5 });
   }
   if (s === "lipstick") {
-    k.drawEllipse({ radiusX: hMW + 14, radiusY: hMH + 14, pos: k.vec2(hMX, hMY),
-      color: k.rgb(210, 38, 85), opacity: pulse * 0.5 });
+    k.drawEllipse({ radiusX: hMW + 14, radiusY: hMH + 14, pos: k.vec2(hMX, hMY), color: k.rgb(210, 38, 85), opacity: pulse * 0.5 });
   }
 
   k.drawText({ text: "👆 TAP THE FACE", size: 18, pos: k.vec2(FX, FY + FRY + 24),
     anchor: "center", color: k.rgb(180, 40, 100) });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HAIR — multi-layer strand system
+// ─────────────────────────────────────────────────────────────────────────────
+function drawHair(k: K) {
+  // 1. Back volume mass
+  k.drawEllipse({ radiusX: FRX + 22, radiusY: FRY * 1.65,
+    pos: k.vec2(FX, FY + 38), color: k.rgb(...H_ROOT) });
+
+  // 2. Side curtains — left
+  k.drawEllipse({ radiusX: 46, radiusY: FRY * 1.3,
+    pos: k.vec2(FX - FRX + 4, FY + 28), color: k.rgb(...H_MID) });
+  k.drawEllipse({ radiusX: 20, radiusY: FRY * 1.2,
+    pos: k.vec2(FX - FRX + 28, FY + 28), color: k.rgb(...H_ROOT), opacity: 0.55 });
+  const leftStrandData: [number, number, number, number, number, [number,number,number], number][] = [
+    [FX - FRX - 10, FY - 80,  FX - FRX - 18, FY + 120, 6,  H_ROOT,  1.0],
+    [FX - FRX - 2,  FY - 90,  FX - FRX - 8,  FY + 140, 5,  H_MID,   1.0],
+    [FX - FRX + 8,  FY - 95,  FX - FRX + 2,  FY + 150, 5,  H_MID,   0.9],
+    [FX - FRX + 18, FY - 90,  FX - FRX + 14, FY + 145, 4,  H_LIGHT, 0.8],
+    [FX - FRX + 28, FY - 85,  FX - FRX + 22, FY + 135, 4,  H_LIGHT, 0.7],
+    [FX - FRX - 14, FY - 60,  FX - FRX - 22, FY + 100, 3,  H_ROOT,  0.85],
+    [FX - FRX + 4,  FY - 70,  FX - FRX - 4,  FY + 110, 3,  H_MID,   0.75],
+  ];
+  for (const [x1, y1, x2, y2, w, col, op] of leftStrandData) {
+    const mx = (x1 + x2) / 2 - 6;
+    const my = (y1 + y2) / 2;
+    k.drawLine({ p1: k.vec2(x1, y1), p2: k.vec2(mx, my), width: w, color: k.rgb(...col), opacity: op });
+    k.drawLine({ p1: k.vec2(mx, my), p2: k.vec2(x2, y2), width: w * 0.85, color: k.rgb(...col), opacity: op * 0.9 });
+  }
+
+  // 3. Side curtains — right
+  k.drawEllipse({ radiusX: 46, radiusY: FRY * 1.3,
+    pos: k.vec2(FX + FRX - 4, FY + 28), color: k.rgb(...H_MID) });
+  k.drawEllipse({ radiusX: 20, radiusY: FRY * 1.2,
+    pos: k.vec2(FX + FRX - 28, FY + 28), color: k.rgb(...H_ROOT), opacity: 0.55 });
+  const rightStrandData: [number, number, number, number, number, [number,number,number], number][] = [
+    [FX + FRX + 10, FY - 80,  FX + FRX + 18, FY + 120, 6,  H_ROOT,  1.0],
+    [FX + FRX + 2,  FY - 90,  FX + FRX + 8,  FY + 140, 5,  H_MID,   1.0],
+    [FX + FRX - 8,  FY - 95,  FX + FRX - 2,  FY + 150, 5,  H_MID,   0.9],
+    [FX + FRX - 18, FY - 90,  FX + FRX - 14, FY + 145, 4,  H_LIGHT, 0.8],
+    [FX + FRX - 28, FY - 85,  FX + FRX - 22, FY + 135, 4,  H_LIGHT, 0.7],
+    [FX + FRX + 14, FY - 60,  FX + FRX + 22, FY + 100, 3,  H_ROOT,  0.85],
+    [FX + FRX - 4,  FY - 70,  FX + FRX + 4,  FY + 110, 3,  H_MID,   0.75],
+  ];
+  for (const [x1, y1, x2, y2, w, col, op] of rightStrandData) {
+    const mx = (x1 + x2) / 2 + 6;
+    const my = (y1 + y2) / 2;
+    k.drawLine({ p1: k.vec2(x1, y1), p2: k.vec2(mx, my), width: w, color: k.rgb(...col), opacity: op });
+    k.drawLine({ p1: k.vec2(mx, my), p2: k.vec2(x2, y2), width: w * 0.85, color: k.rgb(...col), opacity: op * 0.9 });
+  }
+
+  // 4. Crown / top
+  k.drawEllipse({ radiusX: FRX + 14, radiusY: FRY * 0.52,
+    pos: k.vec2(FX, FY - FRY * 0.54), color: k.rgb(...H_MID) });
+  k.drawEllipse({ radiusX: 6, radiusY: FRY * 0.38,
+    pos: k.vec2(FX, FY - FRY * 0.56), color: k.rgb(...H_ROOT), opacity: 0.7 });
+  const crownStrands: [number, number, number, number, number, [number,number,number]][] = [
+    [FX - 4,  FY - FRY * 0.95, FX - 60,  FY - FRY * 0.55, 5, H_MID],
+    [FX + 4,  FY - FRY * 0.95, FX + 60,  FY - FRY * 0.55, 5, H_MID],
+    [FX - 16, FY - FRY * 0.92, FX - 80,  FY - FRY * 0.48, 4, H_LIGHT],
+    [FX + 16, FY - FRY * 0.92, FX + 80,  FY - FRY * 0.48, 4, H_LIGHT],
+    [FX - 30, FY - FRY * 0.85, FX - 96,  FY - FRY * 0.38, 4, H_MID],
+    [FX + 30, FY - FRY * 0.85, FX + 96,  FY - FRY * 0.38, 4, H_MID],
+    [FX - 44, FY - FRY * 0.75, FX - 100, FY - FRY * 0.22, 3, H_ROOT],
+    [FX + 44, FY - FRY * 0.75, FX + 100, FY - FRY * 0.22, 3, H_ROOT],
+    [FX,      FY - FRY * 0.96, FX,       FY - FRY * 0.55, 4, H_ROOT],
+  ];
+  for (const [x1, y1, x2, y2, w, col] of crownStrands) {
+    k.drawLine({ p1: k.vec2(x1, y1), p2: k.vec2(x2, y2), width: w, color: k.rgb(...col) });
+  }
+
+  // 5. Face-framing wisps
+  const wispL: [number, number, number, number, number][] = [
+    [FX - FRX + 6,  FY - 60, FX - FRX - 2,  FY + 20, 2],
+    [FX - FRX + 12, FY - 50, FX - FRX + 4,  FY + 30, 2],
+    [FX - FRX + 18, FY - 40, FX - FRX + 12, FY + 15, 1],
+  ];
+  for (const [x1, y1, x2, y2, w] of wispL) {
+    k.drawLine({ p1: k.vec2(x1, y1), p2: k.vec2(x2, y2), width: w, color: k.rgb(...H_LIGHT), opacity: 0.7 });
+  }
+  const wispR: [number, number, number, number, number][] = [
+    [FX + FRX - 6,  FY - 60, FX + FRX + 2,  FY + 20, 2],
+    [FX + FRX - 12, FY - 50, FX + FRX - 4,  FY + 30, 2],
+    [FX + FRX - 18, FY - 40, FX + FRX - 12, FY + 15, 1],
+  ];
+  for (const [x1, y1, x2, y2, w] of wispR) {
+    k.drawLine({ p1: k.vec2(x1, y1), p2: k.vec2(x2, y2), width: w, color: k.rgb(...H_LIGHT), opacity: 0.7 });
+  }
+
+  // 6. Specular shine
+  k.drawEllipse({ radiusX: 28, radiusY: 9,
+    pos: k.vec2(FX - 14, FY - FRY * 0.72), color: k.rgb(...H_SHINE), opacity: 0.55 });
+  k.drawEllipse({ radiusX: 12, radiusY: 5,
+    pos: k.vec2(FX + 20, FY - FRY * 0.62), color: k.rgb(...H_SHINE), opacity: 0.32 });
+  k.drawCircle({ pos: k.vec2(FX - 10, FY - FRY * 0.74), radius: 4,
+    color: k.rgb(255, 240, 250), opacity: 0.6 });
 }
