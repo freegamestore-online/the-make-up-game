@@ -135,8 +135,8 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
 
     // Instruction bar
     k.add([k.rect(VW, 72), k.color(240, 160, 200), k.pos(0, 0), k.fixed(), k.z(10)]);
-    const emojiLbl   = k.add([k.text("", { size: 28 }), k.anchor("center"), k.pos(30, 36), k.fixed(), k.z(11)]);
-    const instrLbl   = k.add([k.text("", { size: 14, width: VW - 72, align: "left" }), k.color(100, 10, 60), k.pos(60, 14), k.fixed(), k.z(11)]);
+    const emojiLbl = k.add([k.text("", { size: 28 }), k.anchor("center"), k.pos(30, 36), k.fixed(), k.z(11)]);
+    const instrLbl = k.add([k.text("", { size: 14, width: VW - 72, align: "left" }), k.color(100, 10, 60), k.pos(60, 14), k.fixed(), k.z(11)]);
 
     // Progress bar
     k.add([k.rect(VW - 40, 9, { radius: 5 }), k.color(220, 175, 200), k.pos(20, VH - 18), k.fixed(), k.z(10)]);
@@ -275,22 +275,21 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
         k.drawEllipse({ radiusX: EW + 4, radiusY: EH + 5,  pos: k.vec2(ERX, ERY - 1), color: k.rgb(200, 150, 255), opacity: 0.45 });
       }
 
-      // ── Eyes (drawn as a helper so we can re-draw them on top of liner) ───
+      // Eyes
       drawEyeballs(k);
 
-      // ── Eyeliner — drawn ON TOP of eyeball, hugging the lid edges ─────────
-      // The liner traces the upper lid arc and lower lid arc using short
-      // segments sampled from the ellipse boundary, so it never cuts across
-      // the eyeball itself.
+      // Eyeliner — hugs lid edges, never crosses eyeball
       if (linerDone) {
         drawEyeliner(k, ELX, ELY, EW, EH);
         drawEyeliner(k, ERX, ERY, EW, EH);
-        // Re-draw catchlights so they stay visible above the liner
         drawCatchlights(k);
       }
 
-      // Mascara / lashes (always on top of liner)
-      if (mascaraDone) { drawLashes(k, ELX, ELY, EW, EH); drawLashes(k, ERX, ERY, EW, EH); }
+      // Mascara lashes — always on top
+      if (mascaraDone) {
+        drawLashes(k, ELX, ELY, EW, EH);
+        drawLashes(k, ERX, ERY, EW, EH);
+      }
 
       // Nose
       drawNose(k, NX, NY);
@@ -361,19 +360,17 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
   return () => k.quit();
 }
 
-// ── Eyeballs (whites → iris → pupil) ─────────────────────────────────────────
+// ── Eyeballs ──────────────────────────────────────────────────────────────────
 function drawEyeballs(k: K) {
-  // Whites
   k.drawEllipse({ radiusX: EW, radiusY: EH, pos: k.vec2(ELX, ELY), color: k.rgb(255, 255, 255) });
   k.drawEllipse({ radiusX: EW, radiusY: EH, pos: k.vec2(ERX, ERY), color: k.rgb(255, 255, 255) });
-  // Iris
   k.drawCircle({ pos: k.vec2(ELX, ELY), radius: 9, color: k.rgb(80, 140, 70) });
   k.drawCircle({ pos: k.vec2(ERX, ERY), radius: 9, color: k.rgb(80, 140, 70) });
   k.drawCircle({ pos: k.vec2(ELX, ELY), radius: 9, color: k.rgb(40, 80, 30), opacity: 0.5 });
   k.drawCircle({ pos: k.vec2(ERX, ERY), radius: 9, color: k.rgb(40, 80, 30), opacity: 0.5 });
-  // Pupil
   k.drawCircle({ pos: k.vec2(ELX, ELY), radius: 5, color: k.rgb(10, 8, 8) });
   k.drawCircle({ pos: k.vec2(ERX, ERY), radius: 5, color: k.rgb(10, 8, 8) });
+  drawCatchlights(k);
 }
 
 // ── Catchlights ───────────────────────────────────────────────────────────────
@@ -384,69 +381,104 @@ function drawCatchlights(k: K) {
   k.drawCircle({ pos: k.vec2(ERX - 2, ERY + 2), radius: 1.2, color: k.rgb(255, 255, 255), opacity: 0.6 });
 }
 
-// ── Eyeliner — traces the lid edges, never crosses the eyeball ────────────────
-// Samples points along the TOP half of the eye ellipse for the upper lid line,
-// and the BOTTOM half for the lower waterline. A winged flick extends from the
-// outer corner of the upper lid outward.
+// ── Eyeliner — traces lid edges, never crosses eyeball ────────────────────────
 function drawEyeliner(k: K, ex: number, ey: number, ew: number, eh: number) {
   const SEGS = 12;
-
-  // Upper lid — trace from inner (left) corner to outer (right) corner
-  // along the top arc of the ellipse (angle π → 0, i.e. left to right)
+  // Upper lid arc (π → 0, left to right across top)
   for (let i = 0; i < SEGS; i++) {
-    const a0 = Math.PI - (i / SEGS) * Math.PI;       // π → 0
+    const a0 = Math.PI - (i / SEGS) * Math.PI;
     const a1 = Math.PI - ((i + 1) / SEGS) * Math.PI;
-    const x0 = ex + Math.cos(a0) * ew;
-    const y0 = ey + Math.sin(a0) * eh;               // top arc: sin is negative here → above centre
-    const x1 = ex + Math.cos(a1) * ew;
-    const y1 = ey + Math.sin(a1) * eh;
-    k.drawLine({ p1: k.vec2(x0, y0), p2: k.vec2(x1, y1), width: 2.5, color: k.rgb(10, 5, 5) });
-  }
-
-  // Lower waterline — trace bottom arc, thinner
-  for (let i = 0; i < SEGS; i++) {
-    const a0 = (i / SEGS) * Math.PI;                 // 0 → π (bottom arc)
-    const a1 = ((i + 1) / SEGS) * Math.PI;
-    const x0 = ex + Math.cos(a0) * ew;
-    const y0 = ey + Math.sin(a0) * eh;
-    const x1 = ex + Math.cos(a1) * ew;
-    const y1 = ey + Math.sin(a1) * eh;
-    k.drawLine({ p1: k.vec2(x0, y0), p2: k.vec2(x1, y1), width: 1.2, color: k.rgb(10, 5, 5), opacity: 0.7 });
-  }
-
-  // Wing flick — extends from outer corner of upper lid
-  const outerX = ex + ew;
-  const outerY = ey;                                  // rightmost point of ellipse
-  const wingX  = outerX + 8;
-  const wingY  = outerY - eh * 0.9;                  // flick upward & outward
-  k.drawLine({ p1: k.vec2(outerX, outerY), p2: k.vec2(wingX, wingY), width: 2, color: k.rgb(10, 5, 5) });
-}
-
-// ── Long fluttery lashes ──────────────────────────────────────────────────────
-function drawLashes(k: K, ex: number, ey: number, ew: number, eh: number) {
-  const count = 10;
-  for (let i = 0; i < count; i++) {
-    const t   = i / (count - 1) - 0.5;
-    // Root sits on the top arc of the eye ellipse
-    const ang = Math.PI + t * Math.PI;               // top half: π to 2π
-    const bx  = ex + Math.cos(ang) * ew;
-    const by  = ey + Math.sin(ang) * eh;
-    const lean = t * 0.7 - 0.1;
-    const len  = 11 + Math.abs(t) * 7;
     k.drawLine({
-      p1: k.vec2(bx, by),
-      p2: k.vec2(bx + Math.sin(lean) * len * 0.35, by - Math.cos(lean) * len),
-      width: 2.4, color: k.rgb(8, 5, 5),
+      p1: k.vec2(ex + Math.cos(a0) * ew, ey + Math.sin(a0) * eh),
+      p2: k.vec2(ex + Math.cos(a1) * ew, ey + Math.sin(a1) * eh),
+      width: 2.5, color: k.rgb(10, 5, 5),
     });
   }
-  // Lower lashes — root on the bottom arc
-  for (let i = 0; i < 6; i++) {
-    const t  = i / 5 - 0.5;
-    const ang = t * Math.PI;                          // bottom half: -π/2 to π/2
-    const bx = ex + Math.cos(ang) * ew * 0.8;
-    const by = ey + Math.sin(ang) * eh + eh * 0.5;
-    k.drawLine({ p1: k.vec2(bx, by), p2: k.vec2(bx, by + 5),
-      width: 1.5, color: k.rgb(8, 5, 5), opacity: 0.7 });
+  // Lower waterline arc (0 → π, left to right across bottom)
+  for (let i = 0; i < SEGS; i++) {
+    const a0 = (i / SEGS) * Math.PI;
+    const a1 = ((i + 1) / SEGS) * Math.PI;
+    k.drawLine({
+      p1: k.vec2(ex + Math.cos(a0) * ew, ey + Math.sin(a0) * eh),
+      p2: k.vec2(ex + Math.cos(a1) * ew, ey + Math.sin(a1) * eh),
+      width: 1.2, color: k.rgb(10, 5, 5), opacity: 0.7,
+    });
+  }
+  // Wing flick from outer corner
+  k.drawLine({
+    p1: k.vec2(ex + ew, ey),
+    p2: k.vec2(ex + ew + 8, ey - eh * 0.9),
+    width: 2, color: k.rgb(10, 5, 5),
+  });
+}
+
+// ── Lashes — long, even, symmetrically fanned ─────────────────────────────────
+// Each lash root sits exactly on the top arc of the eye ellipse.
+// All lashes are the same base length; they fan outward symmetrically from
+// the normal to the ellipse at that point, with a gentle outward lean at the
+// corners — no random variation so both eyes match perfectly.
+function drawLashes(k: K, ex: number, ey: number, ew: number, eh: number) {
+  const COUNT = 11;          // odd number → one lash dead-centre
+  const BASE_LEN = 20;       // uniform base length (longer than before)
+  const LEAN_MAX = 0.38;     // max sideways lean at outer corners (radians)
+
+  for (let i = 0; i < COUNT; i++) {
+    // t goes from -0.5 (inner corner) to +0.5 (outer corner)
+    const t = i / (COUNT - 1) - 0.5;
+
+    // Root: sample the top arc of the ellipse
+    // top arc angle: π (left end) → 0 (right end)
+    const arcAngle = Math.PI * (1 - (t + 0.5));
+    const rootX = ex + Math.cos(arcAngle) * ew;
+    const rootY = ey + Math.sin(arcAngle) * eh;   // negative y = above centre
+
+    // Normal direction at this point on the ellipse (points outward/upward)
+    // Normal angle = atan2(sin/ry², cos/rx²) — simplified for uniform outward
+    const nx = Math.cos(arcAngle) / ew;
+    const ny = Math.sin(arcAngle) / eh;
+    const nLen = Math.sqrt(nx * nx + ny * ny);
+    const normalAngle = Math.atan2(ny / nLen, nx / nLen);
+
+    // Add a gentle outward lean proportional to position (symmetric)
+    const lean = t * LEAN_MAX;
+    const lashAngle = normalAngle + lean;
+
+    const tipX = rootX + Math.cos(lashAngle) * BASE_LEN;
+    const tipY = rootY + Math.sin(lashAngle) * BASE_LEN;
+
+    k.drawLine({
+      p1: k.vec2(rootX, rootY),
+      p2: k.vec2(tipX, tipY),
+      width: 2.2,
+      color: k.rgb(8, 5, 5),
+    });
+  }
+
+  // Lower lashes — shorter, even spacing along bottom arc
+  const LOWER_COUNT = 7;
+  const LOWER_LEN   = 7;
+  for (let i = 0; i < LOWER_COUNT; i++) {
+    const t = i / (LOWER_COUNT - 1) - 0.5;
+    const arcAngle = t * Math.PI;                  // 0 = right, π = left (bottom arc)
+    const rootX = ex + Math.cos(arcAngle) * ew;
+    const rootY = ey + Math.sin(arcAngle) * eh;
+
+    // Normal at bottom arc points downward
+    const nx = Math.cos(arcAngle) / ew;
+    const ny = Math.sin(arcAngle) / eh;
+    const nLen = Math.sqrt(nx * nx + ny * ny);
+    const normalAngle = Math.atan2(ny / nLen, nx / nLen);
+
+    const tipX = rootX + Math.cos(normalAngle) * LOWER_LEN;
+    const tipY = rootY + Math.sin(normalAngle) * LOWER_LEN;
+
+    k.drawLine({
+      p1: k.vec2(rootX, rootY),
+      p2: k.vec2(tipX, tipY),
+      width: 1.4,
+      color: k.rgb(8, 5, 5),
+      opacity: 0.75,
+    });
   }
 }
 
@@ -514,9 +546,7 @@ function drawHint(k: K, s: string, pulse: number) {
     anchor: "center", color: k.rgb(180, 40, 100) });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HAIR — multi-layer strand system
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Hair — multi-layer strand system ─────────────────────────────────────────
 function drawHair(k: K) {
   // 1. Back volume mass
   k.drawEllipse({ radiusX: FRX + 22, radiusY: FRY * 1.65,
@@ -527,18 +557,17 @@ function drawHair(k: K) {
     pos: k.vec2(FX - FRX + 4, FY + 28), color: k.rgb(...H_MID) });
   k.drawEllipse({ radiusX: 20, radiusY: FRY * 1.2,
     pos: k.vec2(FX - FRX + 28, FY + 28), color: k.rgb(...H_ROOT), opacity: 0.55 });
-  const leftStrandData: [number, number, number, number, number, [number,number,number], number][] = [
-    [FX - FRX - 10, FY - 80,  FX - FRX - 18, FY + 120, 6,  H_ROOT,  1.0],
-    [FX - FRX - 2,  FY - 90,  FX - FRX - 8,  FY + 140, 5,  H_MID,   1.0],
-    [FX - FRX + 8,  FY - 95,  FX - FRX + 2,  FY + 150, 5,  H_MID,   0.9],
-    [FX - FRX + 18, FY - 90,  FX - FRX + 14, FY + 145, 4,  H_LIGHT, 0.8],
-    [FX - FRX + 28, FY - 85,  FX - FRX + 22, FY + 135, 4,  H_LIGHT, 0.7],
-    [FX - FRX - 14, FY - 60,  FX - FRX - 22, FY + 100, 3,  H_ROOT,  0.85],
-    [FX - FRX + 4,  FY - 70,  FX - FRX - 4,  FY + 110, 3,  H_MID,   0.75],
+  const leftStrands: [number, number, number, number, number, [number,number,number], number][] = [
+    [FX - FRX - 10, FY - 80,  FX - FRX - 18, FY + 120, 6, H_ROOT,  1.0],
+    [FX - FRX - 2,  FY - 90,  FX - FRX - 8,  FY + 140, 5, H_MID,   1.0],
+    [FX - FRX + 8,  FY - 95,  FX - FRX + 2,  FY + 150, 5, H_MID,   0.9],
+    [FX - FRX + 18, FY - 90,  FX - FRX + 14, FY + 145, 4, H_LIGHT, 0.8],
+    [FX - FRX + 28, FY - 85,  FX - FRX + 22, FY + 135, 4, H_LIGHT, 0.7],
+    [FX - FRX - 14, FY - 60,  FX - FRX - 22, FY + 100, 3, H_ROOT,  0.85],
+    [FX - FRX + 4,  FY - 70,  FX - FRX - 4,  FY + 110, 3, H_MID,   0.75],
   ];
-  for (const [x1, y1, x2, y2, w, col, op] of leftStrandData) {
-    const mx = (x1 + x2) / 2 - 6;
-    const my = (y1 + y2) / 2;
+  for (const [x1, y1, x2, y2, w, col, op] of leftStrands) {
+    const mx = (x1 + x2) / 2 - 6, my = (y1 + y2) / 2;
     k.drawLine({ p1: k.vec2(x1, y1), p2: k.vec2(mx, my), width: w, color: k.rgb(...col), opacity: op });
     k.drawLine({ p1: k.vec2(mx, my), p2: k.vec2(x2, y2), width: w * 0.85, color: k.rgb(...col), opacity: op * 0.9 });
   }
@@ -548,18 +577,17 @@ function drawHair(k: K) {
     pos: k.vec2(FX + FRX - 4, FY + 28), color: k.rgb(...H_MID) });
   k.drawEllipse({ radiusX: 20, radiusY: FRY * 1.2,
     pos: k.vec2(FX + FRX - 28, FY + 28), color: k.rgb(...H_ROOT), opacity: 0.55 });
-  const rightStrandData: [number, number, number, number, number, [number,number,number], number][] = [
-    [FX + FRX + 10, FY - 80,  FX + FRX + 18, FY + 120, 6,  H_ROOT,  1.0],
-    [FX + FRX + 2,  FY - 90,  FX + FRX + 8,  FY + 140, 5,  H_MID,   1.0],
-    [FX + FRX - 8,  FY - 95,  FX + FRX - 2,  FY + 150, 5,  H_MID,   0.9],
-    [FX + FRX - 18, FY - 90,  FX + FRX - 14, FY + 145, 4,  H_LIGHT, 0.8],
-    [FX + FRX - 28, FY - 85,  FX + FRX - 22, FY + 135, 4,  H_LIGHT, 0.7],
-    [FX + FRX + 14, FY - 60,  FX + FRX + 22, FY + 100, 3,  H_ROOT,  0.85],
-    [FX + FRX - 4,  FY - 70,  FX + FRX + 4,  FY + 110, 3,  H_MID,   0.75],
+  const rightStrands: [number, number, number, number, number, [number,number,number], number][] = [
+    [FX + FRX + 10, FY - 80,  FX + FRX + 18, FY + 120, 6, H_ROOT,  1.0],
+    [FX + FRX + 2,  FY - 90,  FX + FRX + 8,  FY + 140, 5, H_MID,   1.0],
+    [FX + FRX - 8,  FY - 95,  FX + FRX - 2,  FY + 150, 5, H_MID,   0.9],
+    [FX + FRX - 18, FY - 90,  FX + FRX - 14, FY + 145, 4, H_LIGHT, 0.8],
+    [FX + FRX - 28, FY - 85,  FX + FRX - 22, FY + 135, 4, H_LIGHT, 0.7],
+    [FX + FRX + 14, FY - 60,  FX + FRX + 22, FY + 100, 3, H_ROOT,  0.85],
+    [FX + FRX - 4,  FY - 70,  FX + FRX + 4,  FY + 110, 3, H_MID,   0.75],
   ];
-  for (const [x1, y1, x2, y2, w, col, op] of rightStrandData) {
-    const mx = (x1 + x2) / 2 + 6;
-    const my = (y1 + y2) / 2;
+  for (const [x1, y1, x2, y2, w, col, op] of rightStrands) {
+    const mx = (x1 + x2) / 2 + 6, my = (y1 + y2) / 2;
     k.drawLine({ p1: k.vec2(x1, y1), p2: k.vec2(mx, my), width: w, color: k.rgb(...col), opacity: op });
     k.drawLine({ p1: k.vec2(mx, my), p2: k.vec2(x2, y2), width: w * 0.85, color: k.rgb(...col), opacity: op * 0.9 });
   }
