@@ -41,6 +41,10 @@ const NX = FX, NY = FY + 10;
 // Button strip
 const BTN_Y = VH - 82;
 
+// Blink timing
+const BLINK_INTERVAL = 3.0;   // seconds between blinks
+const BLINK_DURATION = 0.15;  // total blink duration (close + open)
+
 const STEPS = [
   { id: "foundation", emoji: "🧴", label: "Tap the face to apply foundation!" },
   { id: "eyeshadow",  emoji: "👁️",  label: "Tap the face to apply eye shadow!" },
@@ -64,6 +68,14 @@ function inCircle(px: number, py: number, cx: number, cy: number, r: number): bo
 }
 
 function clamp01(v: number): number { return v < 0 ? 0 : v > 1 ? 1 : v; }
+
+// Returns a 0→1 blink factor (0 = fully open, 1 = fully closed)
+// Uses a smooth sine curve: rises to 1 at midpoint then falls back to 0
+function blinkFactor(t: number): number {
+  // t in [0, BLINK_DURATION]: map to [0, π] and take sin
+  const phase = (t / BLINK_DURATION) * Math.PI;
+  return Math.sin(phase); // 0 → 1 → 0
+}
 
 interface Confetti {
   x: number; y: number; vx: number; vy: number;
@@ -220,6 +232,15 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
       const s = isDone ? "done" : currentStep();
       const t0 = k.time();
 
+      // ── Blink calculation ────────────────────────────────────────────────
+      // Every BLINK_INTERVAL seconds a blink starts; it lasts BLINK_DURATION.
+      // eyeOpen is 1.0 normally and squishes toward 0 at peak blink.
+      const cycleTime = t0 % BLINK_INTERVAL;
+      const isBlinking = cycleTime < BLINK_DURATION;
+      const eyeOpen = isBlinking ? 1 - blinkFactor(cycleTime) : 1.0;
+      // Actual rendered eye height (never quite reaches 0 so lid is visible)
+      const curEH = Math.max(EH * eyeOpen, 0.5);
+
       // Decorative background sparkles
       for (let i = 0; i < 6; i++) {
         const bx = 30 + (i * 68) % VW;
@@ -275,20 +296,31 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
         k.drawEllipse({ radiusX: EW + 4, radiusY: EH + 5,  pos: k.vec2(ERX, ERY - 1), color: k.rgb(200, 150, 255), opacity: 0.45 });
       }
 
-      // Eyes
-      drawEyeballs(k);
+      // Eyes — pass curEH so they squish during blink
+      drawEyeballs(k, curEH);
 
       // Eyeliner — hugs lid edges, never crosses eyeball
       if (linerDone) {
-        drawEyeliner(k, ELX, ELY, EW, EH);
-        drawEyeliner(k, ERX, ERY, EW, EH);
-        drawCatchlights(k);
+        drawEyeliner(k, ELX, ELY, EW, curEH);
+        drawEyeliner(k, ERX, ERY, EW, curEH);
+        // Re-draw catchlights on top of liner (skip during blink)
+        if (!isBlinking) drawCatchlights(k);
       }
 
-      // Mascara lashes — always on top
+      // Mascara lashes — always on top, squish with eye
       if (mascaraDone) {
-        drawLashes(k, ELX, ELY, EW, EH);
-        drawLashes(k, ERX, ERY, EW, EH);
+        drawLashes(k, ELX, ELY, EW, curEH);
+        drawLashes(k, ERX, ERY, EW, curEH);
+      }
+
+      // Draw the eyelid crease on top to seal the eye shut during blink
+      if (isBlinking) {
+        // Skin-coloured lid covers the eye as it closes
+        k.drawEllipse({ radiusX: EW + 1, radiusY: curEH + 1, pos: k.vec2(ELX, ELY), color: k.rgb(...SKIN) });
+        k.drawEllipse({ radiusX: EW + 1, radiusY: curEH + 1, pos: k.vec2(ERX, ERY), color: k.rgb(...SKIN) });
+        // Lid crease line
+        k.drawLine({ p1: k.vec2(ELX - EW, ELY), p2: k.vec2(ELX + EW, ELY), width: 2, color: k.rgb(...SKIN_DARK), opacity: 0.5 });
+        k.drawLine({ p1: k.vec2(ERX - EW, ERY), p2: k.vec2(ERX + EW, ERY), width: 2, color: k.rgb(...SKIN_DARK), opacity: 0.5 });
       }
 
       // Nose
@@ -360,17 +392,21 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
   return () => k.quit();
 }
 
-// ── Eyeballs ──────────────────────────────────────────────────────────────────
-function drawEyeballs(k: K) {
-  k.drawEllipse({ radiusX: EW, radiusY: EH, pos: k.vec2(ELX, ELY), color: k.rgb(255, 255, 255) });
-  k.drawEllipse({ radiusX: EW, radiusY: EH, pos: k.vec2(ERX, ERY), color: k.rgb(255, 255, 255) });
-  k.drawCircle({ pos: k.vec2(ELX, ELY), radius: 9, color: k.rgb(80, 140, 70) });
-  k.drawCircle({ pos: k.vec2(ERX, ERY), radius: 9, color: k.rgb(80, 140, 70) });
-  k.drawCircle({ pos: k.vec2(ELX, ELY), radius: 9, color: k.rgb(40, 80, 30), opacity: 0.5 });
-  k.drawCircle({ pos: k.vec2(ERX, ERY), radius: 9, color: k.rgb(40, 80, 30), opacity: 0.5 });
-  k.drawCircle({ pos: k.vec2(ELX, ELY), radius: 5, color: k.rgb(10, 8, 8) });
-  k.drawCircle({ pos: k.vec2(ERX, ERY), radius: 5, color: k.rgb(10, 8, 8) });
-  drawCatchlights(k);
+// ── Eyeballs — accepts curEH so they squish during blink ─────────────────────
+function drawEyeballs(k: K, curEH: number) {
+  // Whites
+  k.drawEllipse({ radiusX: EW, radiusY: curEH, pos: k.vec2(ELX, ELY), color: k.rgb(255, 255, 255) });
+  k.drawEllipse({ radiusX: EW, radiusY: curEH, pos: k.vec2(ERX, ERY), color: k.rgb(255, 255, 255) });
+  // Only draw iris/pupil when eye is meaningfully open
+  if (curEH > 2) {
+    k.drawCircle({ pos: k.vec2(ELX, ELY), radius: 9, color: k.rgb(80, 140, 70) });
+    k.drawCircle({ pos: k.vec2(ERX, ERY), radius: 9, color: k.rgb(80, 140, 70) });
+    k.drawCircle({ pos: k.vec2(ELX, ELY), radius: 9, color: k.rgb(40, 80, 30), opacity: 0.5 });
+    k.drawCircle({ pos: k.vec2(ERX, ERY), radius: 9, color: k.rgb(40, 80, 30), opacity: 0.5 });
+    k.drawCircle({ pos: k.vec2(ELX, ELY), radius: 5, color: k.rgb(10, 8, 8) });
+    k.drawCircle({ pos: k.vec2(ERX, ERY), radius: 5, color: k.rgb(10, 8, 8) });
+    drawCatchlights(k);
+  }
 }
 
 // ── Catchlights ───────────────────────────────────────────────────────────────
@@ -381,7 +417,7 @@ function drawCatchlights(k: K) {
   k.drawCircle({ pos: k.vec2(ERX - 2, ERY + 2), radius: 1.2, color: k.rgb(255, 255, 255), opacity: 0.6 });
 }
 
-// ── Eyeliner — traces lid edges, never crosses eyeball ────────────────────────
+// ── Eyeliner — traces lid edges using curEH so it follows the blink ───────────
 function drawEyeliner(k: K, ex: number, ey: number, ew: number, eh: number) {
   const SEGS = 12;
   // Upper lid arc (π → 0, left to right across top)
@@ -394,7 +430,7 @@ function drawEyeliner(k: K, ex: number, ey: number, ew: number, eh: number) {
       width: 2.5, color: k.rgb(10, 5, 5),
     });
   }
-  // Lower waterline arc (0 → π, left to right across bottom)
+  // Lower waterline arc (0 → π, bottom)
   for (let i = 0; i < SEGS; i++) {
     const a0 = (i / SEGS) * Math.PI;
     const a1 = ((i + 1) / SEGS) * Math.PI;
@@ -412,58 +448,40 @@ function drawEyeliner(k: K, ex: number, ey: number, ew: number, eh: number) {
   });
 }
 
-// ── Lashes — long, even, symmetrically fanned ─────────────────────────────────
-// Each lash root sits exactly on the top arc of the eye ellipse.
-// All lashes are the same base length; they fan outward symmetrically from
-// the normal to the ellipse at that point, with a gentle outward lean at the
-// corners — no random variation so both eyes match perfectly.
+// ── Lashes — long, even, symmetrically fanned, follow blink ──────────────────
 function drawLashes(k: K, ex: number, ey: number, ew: number, eh: number) {
-  const COUNT = 11;          // odd number → one lash dead-centre
-  const BASE_LEN = 20;       // uniform base length (longer than before)
-  const LEAN_MAX = 0.38;     // max sideways lean at outer corners (radians)
+  const COUNT    = 11;
+  const BASE_LEN = 20;
+  const LEAN_MAX = 0.38;
 
   for (let i = 0; i < COUNT; i++) {
-    // t goes from -0.5 (inner corner) to +0.5 (outer corner)
     const t = i / (COUNT - 1) - 0.5;
-
-    // Root: sample the top arc of the ellipse
-    // top arc angle: π (left end) → 0 (right end)
     const arcAngle = Math.PI * (1 - (t + 0.5));
     const rootX = ex + Math.cos(arcAngle) * ew;
-    const rootY = ey + Math.sin(arcAngle) * eh;   // negative y = above centre
+    const rootY = ey + Math.sin(arcAngle) * eh;
 
-    // Normal direction at this point on the ellipse (points outward/upward)
-    // Normal angle = atan2(sin/ry², cos/rx²) — simplified for uniform outward
     const nx = Math.cos(arcAngle) / ew;
     const ny = Math.sin(arcAngle) / eh;
     const nLen = Math.sqrt(nx * nx + ny * ny);
     const normalAngle = Math.atan2(ny / nLen, nx / nLen);
-
-    // Add a gentle outward lean proportional to position (symmetric)
     const lean = t * LEAN_MAX;
     const lashAngle = normalAngle + lean;
 
     const tipX = rootX + Math.cos(lashAngle) * BASE_LEN;
     const tipY = rootY + Math.sin(lashAngle) * BASE_LEN;
 
-    k.drawLine({
-      p1: k.vec2(rootX, rootY),
-      p2: k.vec2(tipX, tipY),
-      width: 2.2,
-      color: k.rgb(8, 5, 5),
-    });
+    k.drawLine({ p1: k.vec2(rootX, rootY), p2: k.vec2(tipX, tipY), width: 2.2, color: k.rgb(8, 5, 5) });
   }
 
-  // Lower lashes — shorter, even spacing along bottom arc
+  // Lower lashes
   const LOWER_COUNT = 7;
   const LOWER_LEN   = 7;
   for (let i = 0; i < LOWER_COUNT; i++) {
     const t = i / (LOWER_COUNT - 1) - 0.5;
-    const arcAngle = t * Math.PI;                  // 0 = right, π = left (bottom arc)
+    const arcAngle = t * Math.PI;
     const rootX = ex + Math.cos(arcAngle) * ew;
     const rootY = ey + Math.sin(arcAngle) * eh;
 
-    // Normal at bottom arc points downward
     const nx = Math.cos(arcAngle) / ew;
     const ny = Math.sin(arcAngle) / eh;
     const nLen = Math.sqrt(nx * nx + ny * ny);
@@ -472,13 +490,7 @@ function drawLashes(k: K, ex: number, ey: number, ew: number, eh: number) {
     const tipX = rootX + Math.cos(normalAngle) * LOWER_LEN;
     const tipY = rootY + Math.sin(normalAngle) * LOWER_LEN;
 
-    k.drawLine({
-      p1: k.vec2(rootX, rootY),
-      p2: k.vec2(tipX, tipY),
-      width: 1.4,
-      color: k.rgb(8, 5, 5),
-      opacity: 0.75,
-    });
+    k.drawLine({ p1: k.vec2(rootX, rootY), p2: k.vec2(tipX, tipY), width: 1.4, color: k.rgb(8, 5, 5), opacity: 0.75 });
   }
 }
 
@@ -612,23 +624,23 @@ function drawHair(k: K) {
     k.drawLine({ p1: k.vec2(x1, y1), p2: k.vec2(x2, y2), width: w, color: k.rgb(...col) });
   }
 
-  // 5. Face-framing wisps
+  // 5. Face-framing wisps — left
   const wispL: [number, number, number, number, number][] = [
     [FX - FRX + 6,  FY - 60, FX - FRX - 2,  FY + 20, 2],
     [FX - FRX + 12, FY - 50, FX - FRX + 4,  FY + 30, 2],
     [FX - FRX + 18, FY - 40, FX - FRX + 12, FY + 15, 1],
   ];
-  for (const [x1, y1, x2, y2, w] of wispL) {
+  for (const [x1, y1, x2, y2, w] of wispL)
     k.drawLine({ p1: k.vec2(x1, y1), p2: k.vec2(x2, y2), width: w, color: k.rgb(...H_LIGHT), opacity: 0.7 });
-  }
+
+  // 5b. Face-framing wisps — right
   const wispR: [number, number, number, number, number][] = [
     [FX + FRX - 6,  FY - 60, FX + FRX + 2,  FY + 20, 2],
     [FX + FRX - 12, FY - 50, FX + FRX - 4,  FY + 30, 2],
     [FX + FRX - 18, FY - 40, FX + FRX - 12, FY + 15, 1],
   ];
-  for (const [x1, y1, x2, y2, w] of wispR) {
+  for (const [x1, y1, x2, y2, w] of wispR)
     k.drawLine({ p1: k.vec2(x1, y1), p2: k.vec2(x2, y2), width: w, color: k.rgb(...H_LIGHT), opacity: 0.7 });
-  }
 
   // 6. Specular shine
   k.drawEllipse({ radiusX: 28, radiusY: 9,
