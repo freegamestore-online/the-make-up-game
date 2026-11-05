@@ -19,7 +19,7 @@ export default function App() {
         <GameTopbar
           title="The Make-up Game"
           score={score}
-          scoreLabel={score >= 100 ? "💖 Done!" : `${score}%`}
+          stats={[{ label: "Progress", value: score >= 100 ? "💖 Done!" : `${score}%` }]}
         />
       }
     >
